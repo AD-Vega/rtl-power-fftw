@@ -19,28 +19,53 @@
 #include <math.h>
 #include <fftw3.h>
 #include <stdlib.h>
+
+#include <pthread.h>
+//#include <libusb.h>
+#include <rtl-sdr.h>
+//#include <rtl-sdr/convenience/convenience.h>
 #define RE 0
 #define IM 1
+
+static rtlsdr_dev_t *dev = NULL;
+
 int main(int argc, char **argv)
 {
-  int N = 32;
+  int N = 1024;
+  int dev_index = 0;
+  int r;
+  int gain = 290;
+  int buf_len, n_read;
+  buf_len = 2 * N;
+  uint8_t *buf8;
+  buf8 = (uint8_t *) malloc (buf_len * sizeof(uint8_t));
+  //dev_index = verbose_device_search("0");
+  r = rtlsdr_open(&dev, (uint32_t)dev_index);
+  rtlsdr_set_tuner_gain(dev, gain);
+  rtlsdr_set_center_freq(dev, (uint32_t)89300000);
+  usleep(5000);
+  rtlsdr_reset_buffer(dev);
+  rtlsdr_set_sample_rate(dev, (uint32_t)1800000);
+  rtlsdr_read_sync(dev, buf8, buf_len, &n_read);
+  rtlsdr_close(dev);
+  if (n_read != buf_len) {
+    fprintf(stderr, "Error: dropped samples.\n");}
   fftw_complex *inbuf, *outbuf;
   inbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   outbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   fftw_plan plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
-  int i; 
-  double w;
-  for (i=0; i < N; i++) {
-    w = (double)i / (double)N * M_PI;
-    inbuf[i][RE] = 2.0 * cos(6.0*w) + cos(15.0*w);
-    inbuf[i][IM] = 2.0 * sin(6.0*w) + sin(15.0*w);
-    printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
+  int i;
+  for (i = 0 ; i < buf_len ; i += 2) {
+    inbuf[i/2][RE] = (double) buf8[i];
+    inbuf[i/2][IM] = (double) buf8[i + 1];
+    //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
   }
   fftw_execute(plan);
   fftw_destroy_plan(plan);
   
   for (i=0; i < N; i++) {
     printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], sqrt(outbuf[i][RE] * outbuf[i][RE] + outbuf[i][IM] * outbuf[i][IM]));
-  }  
+  }
+  
   return 0;
 }
