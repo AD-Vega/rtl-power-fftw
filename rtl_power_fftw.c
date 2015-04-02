@@ -36,7 +36,7 @@ int main(int argc, char **argv)
   int N = 512;
   int repeats = 1000;
   int dev_index = 0;
-  int gain = gain_table[7];
+  int gain = 372;
   int buf_len, n_read;
   buf_len = 2 * N;
   uint8_t *buf8;
@@ -65,20 +65,22 @@ int main(int argc, char **argv)
     if (n_read != buf_len) {
       fprintf(stderr, "Error: dropped samples.\n");}
     else {
-      for (i = 0 ; i < buf_len ; i += 2) {
+      for (i = 0 ; i < buf_len ; i += 4) {
 	inbuf[i/2][RE] = (double) buf8[i] - 127;
 	inbuf[i/2][IM] = (double) buf8[i + 1] - 127;
+	inbuf[i/2 + 1][RE] = ((double) buf8[i+ 2] - 127) * -1;
+	inbuf[i/2 + 1][IM] = ((double) buf8[i + 3] - 127) * -1;
 	//printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
       }
       fftw_execute(plan);
       for (i=0; i < N; i++) {
-	pwr[i] += sqrt(outbuf[i][RE] * outbuf[i][RE] + outbuf[i][IM] * outbuf[i][IM]);
+	pwr[i] += sqrt(outbuf[i][RE] * outbuf[i][RE] + outbuf[i][IM] * outbuf[i][IM]);	
       }
       count++;
     }
   }
   for (i=0; i < N; i++) {
-    printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], accumulator[i][RE], accumulator[i][IM], pwr[i]);
+    printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
   }
   fftw_destroy_plan(plan);
   rtlsdr_close(dev);
