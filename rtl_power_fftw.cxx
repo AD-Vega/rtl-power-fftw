@@ -22,7 +22,10 @@
 #include <stdlib.h>
 
 #include <pthread.h>
-#include "optionparser.h"
+#include <string>
+#include <iostream>
+#include <algorithm>
+#include <tclap/CmdLine.h>
 //#include <libusb.h>
 #include <rtl-sdr.h>
 //#include <rtl-sdr/convenience/convenience.h>
@@ -33,11 +36,41 @@ static rtlsdr_dev_t *dev = NULL;
 
 int main(int argc, char **argv)
 {
-  int gain_table[14] = { -10, 15, 40, 65, 90, 115, 140, 165, 190, 215, 240, 290, 340, 420};
   int N = 512;
-  int repeats = 1000;
+  int repeats = 1;
   int dev_index = 0;
   int gain = 372;
+  int cfreq = 89600000;
+  int s_rate = 2000000;
+  try {
+    TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum",false,512,"N");
+    cmd.add( arg_bins );
+    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89100000,"Hz");
+    cmd.add( arg_freq );
+    TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,2000000,"samples/s");
+    cmd.add( arg_rate );
+    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, 372, "cB (1/10th of dB)");
+    cmd.add( arg_gain );
+    TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging.",false,1,"repeats");
+    cmd.add( arg_repeats );
+    TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,0,"device index");
+    cmd.add( arg_index );
+    
+    cmd.parse(argc, argv);
+    
+    N = arg_bins.getValue();
+    std::cerr << "N: " << N << std::endl;
+    repeats = arg_repeats.getValue();
+    dev_index = arg_index.getValue();
+    gain = arg_gain.getValue();
+    cfreq = arg_freq.getValue();
+    s_rate = arg_rate.getValue();
+  }
+  catch (TCLAP::ArgException &e) { 
+    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
+  }
+  int gain_table[14] = { -10, 15, 40, 65, 90, 115, 140, 165, 190, 215, 240, 290, 340, 420};
   int buf_len, n_read;
   buf_len = 2 * N;
   uint8_t *buf8;
@@ -52,9 +85,9 @@ int main(int argc, char **argv)
   int r;
   r = rtlsdr_open(&dev, (uint32_t)dev_index);
   rtlsdr_set_tuner_gain(dev, gain);
-  rtlsdr_set_center_freq(dev, (uint32_t)89600000);
+  rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   usleep(5000);
-  rtlsdr_set_sample_rate(dev, (uint32_t)2000000);
+  rtlsdr_set_sample_rate(dev, (uint32_t)s_rate);
   int count = 0;
   int i;
   for (i=0; i < N; i++) {
