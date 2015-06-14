@@ -22,6 +22,7 @@
 #include <stdlib.h>
 
 #include <pthread.h>
+#include "optionparser.h"
 //#include <libusb.h>
 #include <rtl-sdr.h>
 //#include <rtl-sdr/convenience/convenience.h>
@@ -51,7 +52,7 @@ int main(int argc, char **argv)
   int r;
   r = rtlsdr_open(&dev, (uint32_t)dev_index);
   rtlsdr_set_tuner_gain(dev, gain);
-  rtlsdr_set_center_freq(dev, (uint32_t)89300000);
+  rtlsdr_set_center_freq(dev, (uint32_t)89600000);
   usleep(5000);
   rtlsdr_set_sample_rate(dev, (uint32_t)2000000);
   int count = 0;
@@ -79,6 +80,7 @@ int main(int argc, char **argv)
       count++;
     }
   }
+  pwr[N/2] = (pwr[N/2 - 1] + pwr[N/2+1]) / 2;
   for (i=0; i < N; i++) {
     printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
   }
