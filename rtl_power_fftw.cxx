@@ -20,7 +20,7 @@
 #include <math.h>
 #include <fftw3.h>
 #include <stdlib.h>
-
+#include <limits>
 #include <pthread.h>
 #include <string>
 #include <iostream>
@@ -34,6 +34,30 @@
 
 static rtlsdr_dev_t *dev = NULL;
 
+int select_nearest_gain(int gain, int size, int *gain_table) {
+  int dif = std::numeric_limits<int>::max();
+  int selected = 0;
+  int temp = 0;
+  for (int i=0; i < size; i++) {
+    temp = abs(gain_table[i] - gain);
+    if ( temp < dif ) {
+      dif = temp;
+      selected = gain_table[i];
+    }
+  }
+  return selected;
+}
+
+void print_gain_table(int size, int *gain_table) {
+  std::cerr << "Available gains: ";
+  for (int i=0; i < size; i++) {
+    if (i != 0) std::cerr << ", ";
+    std::cerr << gain_table[i];
+  }
+  std::cerr << std::endl;
+}
+
+
 int main(int argc, char **argv)
 {
   int N = 512;
@@ -41,10 +65,12 @@ int main(int argc, char **argv)
   int dev_index = 0;
   int gain = 372;
   int cfreq = 89600000;
-  int s_rate = 2000000;
+  int sample_rate = 2000000;
+  int r, num_of_gains, buf_len, n_read;
+  int *gain_table;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum",false,512,"N");
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum",false,512,"even integer > 0");
     cmd.add( arg_bins );
     TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89100000,"Hz");
     cmd.add( arg_freq );
@@ -59,19 +85,47 @@ int main(int argc, char **argv)
     
     cmd.parse(argc, argv);
     
-    N = arg_bins.getValue();
-    std::cerr << "N: " << N << std::endl;
-    repeats = arg_repeats.getValue();
     dev_index = arg_index.getValue();
+    N = arg_bins.getValue();
+    repeats = arg_repeats.getValue();
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
-    s_rate = arg_rate.getValue();
+    sample_rate = arg_rate.getValue();
   }
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
   }
-  int gain_table[14] = { -10, 15, 40, 65, 90, 115, 140, 165, 190, 215, 240, 290, 340, 420};
-  int buf_len, n_read;
+  //Sanity checks
+  int num_of_rtls = rtlsdr_get_device_count();
+  if (num_of_rtls == 0) {
+    std::cerr << "Error: no RTL-SDR compatible devices found. Exiting." << std::endl;
+    return -1;
+  }
+  if ( dev_index >= num_of_rtls) {
+    std::cerr << "Error: invalid device number. Only "<< num_of_rtls << " devices available. Exiting." << std::endl;
+    return -2;
+  } 
+  r = rtlsdr_open(&dev, (uint32_t)dev_index);
+  num_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
+  gain_table = (int *) malloc(num_of_gains*sizeof(int));
+  rtlsdr_get_tuner_gains(dev, gain_table);
+  print_gain_table(num_of_gains, gain_table);
+  gain = select_nearest_gain(gain, num_of_gains, gain_table);
+  std::cerr << "Selected nearest available gain: " << gain << std::endl;
+  rtlsdr_set_tuner_gain_mode(dev, 1);
+  rtlsdr_set_tuner_gain(dev, gain);
+  rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
+  int tuned_freq = rtlsdr_get_center_freq(dev);
+  std::cerr << "Device tuned to: " << tuned_freq << " Hz." << std::endl;
+  usleep(5000);
+  rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
+  int actual_samplerate = rtlsdr_get_sample_rate(dev);
+  if (N % 2 != 0) {
+    N++;
+    std::cerr << "Number of bins should be an even number, changing to " << N << "." << std::endl;
+  }
+  std::cerr << "Number of bins: " << N << std::endl;
+  
   buf_len = 2 * N;
   uint8_t *buf8;
   buf8 = (uint8_t *) malloc (buf_len * sizeof(uint8_t));
@@ -81,13 +135,9 @@ int main(int argc, char **argv)
   outbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   pwr = (double *) malloc (N*sizeof(double));
   fftw_plan plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
-  //dev_index = verbose_device_search("0");
-  int r;
-  r = rtlsdr_open(&dev, (uint32_t)dev_index);
-  rtlsdr_set_tuner_gain(dev, gain);
-  rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
-  usleep(5000);
-  rtlsdr_set_sample_rate(dev, (uint32_t)s_rate);
+
+  
+  
   int count = 0;
   int i;
   for (i=0; i < N; i++) {
@@ -115,7 +165,8 @@ int main(int argc, char **argv)
   }
   pwr[N/2] = (pwr[N/2 - 1] + pwr[N/2+1]) / 2;
   for (i=0; i < N; i++) {
-    printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
+    //printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
+    std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << pwr[i] << std::endl;
   }
   fftw_destroy_plan(plan);
   rtlsdr_close(dev);
