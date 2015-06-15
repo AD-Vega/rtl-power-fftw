@@ -82,6 +82,37 @@ void print_gain_table(int size, int *gain_table) {
   std::cerr << std::endl;
 }
 
+int read_rtlsdr(Datastore data) {
+  int n_read;
+  rtlsdr_reset_buffer(dev);
+  rtlsdr_read_sync(dev, data.buf8, 2*data.N, &n_read);
+  if (n_read != 2*data.N) {
+    //fprintf(stderr, "Error: dropped samples.\n");
+    return 1;
+  }
+  return 0;
+}
+
+void fft(Datastore data) {
+  int i;
+  for (i = 0 ; i < 2*data.N ; i += 4) {
+    //The magic aligment happens here: we have to change phase each next complex sample
+    //by pi - this means that even numbered samples stay the same while odd numbered samples
+    //get multiplied by -1 (thus rotated by pi in complex plane).
+    //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+    data.inbuf[i/2][RE] = (double) data.buf8[i] - 127;
+    data.inbuf[i/2][IM] = (double) data.buf8[i + 1] - 127;
+    data.inbuf[i/2 + 1][RE] = ((double) data.buf8[i+ 2] - 127) * -1;
+    data.inbuf[i/2 + 1][IM] = ((double) data.buf8[i + 3] - 127) * -1;
+    //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
+  }
+  fftw_execute(data.plan);
+  for (i=0; i < data.N; i++) {
+    data.pwr[i] += sqrt(data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM]);	
+  }
+  //Interpolate the central point, to cancel DC bias.
+  data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+}
 
 int main(int argc, char **argv)
 {
@@ -91,17 +122,17 @@ int main(int argc, char **argv)
   int gain = 372;
   int cfreq = 89600000;
   int sample_rate = 2000000;
-  int r, num_of_gains, n_read;
+  int r, num_of_gains;
   int *gain_table;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum",false,512,"even integer > 0");
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be multiple of 256)",false,512,"bins in FFT spectrum");
     cmd.add( arg_bins );
     TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89100000,"Hz");
     cmd.add( arg_freq );
     TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,2000000,"samples/s");
     cmd.add( arg_rate );
-    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, 372, "cB (1/10th of dB)");
+    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, 372, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging.",false,1,"repeats");
     cmd.add( arg_repeats );
@@ -150,9 +181,10 @@ int main(int argc, char **argv)
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
-  if (N % 2 != 0) {
-    N++;
-    std::cerr << "Number of bins should be an even number, changing to " << N << "." << std::endl;
+  //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
+  if (N % 256 != 0) {
+    N = ((floor(N/256.0))+1)*256;
+    std::cerr << "Number of bins should be multiple of 256, changing to " << N << "." << std::endl;
   }
   std::cerr << "Number of bins: " << N << std::endl;
   //Begin the work: prepare data buffers
@@ -164,35 +196,18 @@ int main(int argc, char **argv)
   }
   //Read from device and do FFT
   while (count <= repeats) {
-    rtlsdr_reset_buffer(dev);
-    rtlsdr_read_sync(dev, data.buf8, 2*data.N, &n_read);
-    if (n_read != 2*data.N) {
-      fprintf(stderr, "Error: dropped samples.\n");}
+    if (read_rtlsdr(data)) {
+      fprintf(stderr, "Error: dropped samples.\n");
+    }
     else {
-      for (i = 0 ; i < 2*data.N ; i += 4) {
-	//The magic aligment happens here: we have to change phase each next complex sample
-	//by pi - this means that even numbered samples stay the same while odd numbered samples
-	//get multiplied by -1 (thus rotated by pi in complex plane).
-	//This gets us output spectrum shifted by half its size - just what we need to get the output right.
-	data.inbuf[i/2][RE] = (double) data.buf8[i] - 127;
-	data.inbuf[i/2][IM] = (double) data.buf8[i + 1] - 127;
-	data.inbuf[i/2 + 1][RE] = ((double) data.buf8[i+ 2] - 127) * -1;
-	data.inbuf[i/2 + 1][IM] = ((double) data.buf8[i + 3] - 127) * -1;
-	//printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
-      }
-      fftw_execute(data.plan);
-      for (i=0; i < N; i++) {
-	data.pwr[i] += sqrt(data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM]);	
-      }
+      fft(data);
       count++;
     }
   }
-  //Interpolate the central point, to cancel DC bias.
-  data.pwr[N/2] = (data.pwr[N/2 - 1] + data.pwr[N/2+1]) / 2;
   //Write out.
   for (i=0; i < N; i++) {
     //printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
-    std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << data.pwr[i] << std::endl;
+    std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << 10*log10(data.pwr[i]) << std::endl;
   }
   fftw_destroy_plan(data.plan);
   rtlsdr_close(dev);
