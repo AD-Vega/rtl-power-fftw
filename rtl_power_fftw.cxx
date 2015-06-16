@@ -108,7 +108,7 @@ void fft(Datastore data) {
   }
   fftw_execute(data.plan);
   for (i=0; i < data.N; i++) {
-    data.pwr[i] += sqrt(data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM]);	
+    data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];	
   }
   //Interpolate the central point, to cancel DC bias.
   data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
@@ -120,22 +120,25 @@ int main(int argc, char **argv)
   int repeats = 1;
   int dev_index = 0;
   int gain = 372;
-  int cfreq = 89600000;
+  int cfreq = 89300000;
   int sample_rate = 2000000;
+  int integration_time = 0;
   int r, num_of_gains;
   int *gain_table;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
     TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be multiple of 256)",false,512,"bins in FFT spectrum");
     cmd.add( arg_bins );
-    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89100000,"Hz");
+    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89300000,"Hz");
     cmd.add( arg_freq );
     TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,2000000,"samples/s");
     cmd.add( arg_rate );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, 372, "1/10th of dB");
     cmd.add( arg_gain );
-    TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging.",false,1,"repeats");
+    TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,1,"repeats");
     cmd.add( arg_repeats );
+    TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,0,"seconds");
+    cmd.add( arg_integration_time );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,0,"device index");
     cmd.add( arg_index );
     
@@ -143,7 +146,16 @@ int main(int argc, char **argv)
     
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
-    repeats = arg_repeats.getValue();
+    if (arg_repeats.isSet()) repeats = arg_repeats.getValue();
+    if (arg_integration_time.isSet()) integration_time = arg_integration_time.getValue();
+    //Integration time
+    if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
+      std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
+      return -3;
+    }
+    else if (arg_integration_time.isSet()) {
+      repeats = (int)( (sample_rate * integration_time) / (double)N + 0.5 );
+    }
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
     sample_rate = arg_rate.getValue();
@@ -180,6 +192,9 @@ int main(int argc, char **argv)
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
+  //Print info on capture time
+  std::cerr << "Number of averaged samples: " << repeats << "." << std::endl;
+  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds." << std::endl;
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
   //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
   if (N % 256 != 0) {
@@ -207,7 +222,7 @@ int main(int argc, char **argv)
   //Write out.
   for (i=0; i < N; i++) {
     //printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
-    std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << 10*log10(data.pwr[i]) << std::endl;
+    std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
   fftw_destroy_plan(data.plan);
   rtlsdr_close(dev);

@@ -1,0 +1,3 @@
+Example use with gnuplot to a png file:
+./rtl_power_fftw -f 1420000000 -n 100 -b 515 |\
+gnuplot -e "set term png;plot '< cat -' u 2:3">neki.png
