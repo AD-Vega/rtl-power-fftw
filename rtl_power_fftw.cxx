@@ -34,19 +34,36 @@
 
 static rtlsdr_dev_t *dev = NULL;
 
+int gcd(int a, int b) {
+	if( b==0 ) return a;
+	return gcd(b, a%b);
+}
+
+int lcm(int a, int b){
+	return a*b / gcd(a,b);
+}
+
 class Datastore {
   public:
     int N;
+    int buf_length;
+    int batches;
+    int repeats;
+    int repeats_done;
     uint8_t *buf8;
     fftw_complex *inbuf, *outbuf;
-    double *pwr;
     fftw_plan plan;
-    Datastore(int a);
+    double *pwr;
+    Datastore(int a, int b, int c, int d);
 };
 
-Datastore::Datastore(int a) {
+Datastore::Datastore(int a, int b, int c, int d) {
   N = a;
-  buf8 = (uint8_t *) malloc (2 * N * sizeof(uint8_t));
+  buf_length = b;
+  batches = c;
+  repeats = d;
+  repeats_done = 0;
+  buf8 = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
   inbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   outbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   pwr = (double *) malloc (N*sizeof(double));
@@ -82,36 +99,44 @@ void print_gain_table(int size, int *gain_table) {
   std::cerr << std::endl;
 }
 
-int read_rtlsdr(Datastore data) {
+int read_rtlsdr(Datastore *data) {
   int n_read;
   rtlsdr_reset_buffer(dev);
-  rtlsdr_read_sync(dev, data.buf8, 2*data.N, &n_read);
-  if (n_read != 2*data.N) {
+  rtlsdr_read_sync(dev, data->buf8, data->buf_length, &n_read);
+  if (n_read != data->buf_length) {
     //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
   }
   return 0;
 }
 
-void fft(Datastore data) {
+void fft(Datastore *data) {
   int i;
-  for (i = 0 ; i < 2*data.N ; i += 4) {
-    //The magic aligment happens here: we have to change phase each next complex sample
-    //by pi - this means that even numbered samples stay the same while odd numbered samples
-    //get multiplied by -1 (thus rotated by pi in complex plane).
-    //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-    data.inbuf[i/2][RE] = (double) data.buf8[i] - 127;
-    data.inbuf[i/2][IM] = (double) data.buf8[i + 1] - 127;
-    data.inbuf[i/2 + 1][RE] = ((double) data.buf8[i+ 2] - 127) * -1;
-    data.inbuf[i/2 + 1][IM] = ((double) data.buf8[i + 3] - 127) * -1;
-    //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
-  }
-  fftw_execute(data.plan);
-  for (i=0; i < data.N; i++) {
-    data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];	
+  int batch = 1;
+  while (batch <= data->batches && data->repeats_done < data->repeats) {
+    //std::cerr << "Processing repeat "<< data->repeats_done <<" of " << data->repeats << "in batch " << batch << "."<< std::endl;
+    int j = 0;
+    for (i = 2*data->N*(batch-1) ; i < 2*data->N*batch - 1 ; i += 4) {
+      //The magic aligment happens here: we have to change phase each next complex sample
+      //by pi - this means that even numbered samples stay the same while odd numbered samples
+      //get multiplied by -1 (thus rotated by pi in complex plane).
+      //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+      data->inbuf[j/2][RE] = (double) data->buf8[i] - 127;
+      data->inbuf[j/2][IM] = (double) data->buf8[i + 1] - 127;
+      data->inbuf[j/2 + 1][RE] = ((double) data->buf8[i+ 2] - 127) * -1;
+      data->inbuf[j/2 + 1][IM] = ((double) data->buf8[i + 3] - 127) * -1;
+      //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
+      j+=4;
+    }
+    fftw_execute(data->plan);
+    for (i=0; i < data->N; i++) {
+      data->pwr[i] += data->outbuf[i][RE] * data->outbuf[i][RE] + data->outbuf[i][IM] * data->outbuf[i][IM];	
+    }
+    batch++;
+    data->repeats_done++;
   }
   //Interpolate the central point, to cancel DC bias.
-  data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+  data->pwr[data->N/2] = (data->pwr[data->N/2 - 1] + data->pwr[data->N/2+1]) / 2;
 }
 
 int main(int argc, char **argv)
@@ -123,7 +148,9 @@ int main(int argc, char **argv)
   int cfreq = 89300000;
   int sample_rate = 2000000;
   int integration_time = 0;
-  int r, num_of_gains;
+  int r, num_of_gains, batches, overhang;
+  int buf_length = 16384;
+  double scans;
   int *gain_table;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
@@ -202,20 +229,30 @@ int main(int argc, char **argv)
     std::cerr << "Number of bins should be multiple of 256, changing to " << N << "." << std::endl;
   }
   std::cerr << "Number of bins: " << N << std::endl;
+  std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
+  scans = ceil((2*N*repeats)/buf_length);
+  batches = 16384/(2*N);
+  overhang = 16384 % (2*N);
+  if (overhang != 0) {
+    buf_length = lcm(2*N, buf_length);
+    scans = ceil((2*N*repeats)/buf_length);
+    batches = 16384/(2*N);
+  }
+  std::cerr << "Data collection will proceed in " << scans <<" scans, each consisting of " << batches << " batches." << std::endl;
   //Begin the work: prepare data buffers
-  Datastore data(N);
+  Datastore data(N, buf_length, batches, repeats);
   int count = 0;
   int i;
   for (i=0; i < N; i++) {
     data.pwr[i] = 0;
   }
   //Read from device and do FFT
-  while (count <= repeats) {
-    if (read_rtlsdr(data)) {
+  while (count <= scans) {
+    if (read_rtlsdr(&data)) {
       fprintf(stderr, "Error: dropped samples.\n");
     }
     else {
-      fft(data);
+      fft(&data);
       count++;
     }
   }
