@@ -81,12 +81,6 @@ Datastore::Datastore(int a, int b, int c, int d) {
   pwr = (double *) malloc (N*sizeof(double));
   plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
 }
-    
-    
-
-void worker_thread(int a) {
-  std::cout << a << std::endl;
-}
 
 int select_nearest_gain(int gain, int size, int *gain_table) {
   int dif = std::numeric_limits<int>::max();
@@ -154,7 +148,6 @@ void fft(Datastore& data) {
 	  data.inbuf[j/2][IM] = (double) data.buffer_arr[k][i + 1] - 127;
 	  data.inbuf[j/2 + 1][RE] = ((double) data.buffer_arr[k][i+ 2] - 127) * -1;
 	  data.inbuf[j/2 + 1][IM] = ((double) data.buffer_arr[k][i + 3] - 127) * -1;
-	  //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
 	  j+=4;
 	}
 	fftw_execute(data.plan);
@@ -191,7 +184,7 @@ int main(int argc, char **argv)
   int sample_rate = 2000000;
   int integration_time = 0;
   int r, num_of_gains, batches, overhang;
-  int buf_length = 16384;
+  int buf_length = 16384*100;
   double scans;
   int *gain_table;
   try {
@@ -278,9 +271,12 @@ int main(int argc, char **argv)
   }
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
+  
+  // Due to USB specifics, buffer length for reading rtl_sdr device
+  // should be a multiple of 16384. We have to keep it that way.
   scans = ceil((2*N*repeats)/buf_length);
-  batches = 16384/(2*N);
-  overhang = 16384 % (2*N);
+  batches = buf_length/(2*N);
+  overhang = buf_length % (2*N);
   if (overhang != 0) {
     buf_length = lcm(2*N, buf_length);
     scans = ceil((2*N*repeats)/buf_length);
@@ -294,7 +290,8 @@ int main(int argc, char **argv)
   for (i=0; i < N; i++) {
     data.pwr[i] = 0;
   }
-  
+  //Buffer usage stats
+  int usage[BUFFERS] = {};
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
   int count = 0;
@@ -305,6 +302,7 @@ int main(int argc, char **argv)
       if (data.buf_mutex[i].try_lock()) { 
 	if (data.buf_status[i] == 0) {
 	  buf_available = 1;
+          usage[i]++;
 	  break;
 	}
 	else {
@@ -330,9 +328,11 @@ int main(int argc, char **argv)
   t.join();
   //Write out.
   for (i=0; i < N; i++) {
-    //printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
     std::cout << i << " " << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " " << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
+  std::cerr << "Buffer usage: ";
+  for (auto i : usage) std::cerr << i << ", ";
+  std::cerr << std::endl;
   fftw_destroy_plan(data.plan);
   rtlsdr_close(dev);
   return 0;
