@@ -14,5 +14,10 @@ Environment Profile=
 Extra Arguments=
 Install Directory=
 
+[Defines And Includes][Compiler]
+Name=GCC
+Path=gcc
+Type=GCC
+
 [Project]
 VersionControlSupport=kdevgit

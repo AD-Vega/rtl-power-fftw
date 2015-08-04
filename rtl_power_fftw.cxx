@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <limits>
 #include <thread>
+#include <mutex>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -31,6 +32,7 @@
 //#include <rtl-sdr/convenience/convenience.h>
 #define RE 0
 #define IM 1
+#define BUFFERS 5
 
 static rtlsdr_dev_t *dev = NULL;
 
@@ -50,10 +52,15 @@ class Datastore {
     int batches;
     int repeats;
     int repeats_done;
-    uint8_t *buf8;
+    int acquisition_done;
+    int buf_status[BUFFERS];
+    uint8_t *buffer_arr[BUFFERS];
+    std::mutex buf_mutex[BUFFERS];
+    //uint8_t *buf8;
     fftw_complex *inbuf, *outbuf;
     fftw_plan plan;
     double *pwr;
+    //std::mutex mu;
     Datastore(int a, int b, int c, int d);
 };
 
@@ -63,7 +70,12 @@ Datastore::Datastore(int a, int b, int c, int d) {
   batches = c;
   repeats = d;
   repeats_done = 0;
-  buf8 = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
+  acquisition_done = 0;
+  for (int i = 0; i < BUFFERS; i++) {
+    buffer_arr[i] = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
+    buf_status[i] = 0;
+  }
+  //buf8 = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
   inbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   outbuf = (fftw_complex *) malloc (N*sizeof(fftw_complex));
   pwr = (double *) malloc (N*sizeof(double));
@@ -99,44 +111,74 @@ void print_gain_table(int size, int *gain_table) {
   std::cerr << std::endl;
 }
 
-int read_rtlsdr(Datastore *data) {
+int read_rtlsdr(Datastore& data, int buf) {
   int n_read;
   rtlsdr_reset_buffer(dev);
-  rtlsdr_read_sync(dev, data->buf8, data->buf_length, &n_read);
-  if (n_read != data->buf_length) {
+  rtlsdr_read_sync(dev, data.buffer_arr[buf], data.buf_length, &n_read);
+  if (n_read != data.buf_length) {
     //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
   }
   return 0;
 }
 
-void fft(Datastore *data) {
-  int i;
-  int batch = 1;
-  while (batch <= data->batches && data->repeats_done < data->repeats) {
-    //std::cerr << "Processing repeat "<< data->repeats_done <<" of " << data->repeats << "in batch " << batch << "."<< std::endl;
-    int j = 0;
-    for (i = 2*data->N*(batch-1) ; i < 2*data->N*batch - 1 ; i += 4) {
-      //The magic aligment happens here: we have to change phase each next complex sample
-      //by pi - this means that even numbered samples stay the same while odd numbered samples
-      //get multiplied by -1 (thus rotated by pi in complex plane).
-      //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-      data->inbuf[j/2][RE] = (double) data->buf8[i] - 127;
-      data->inbuf[j/2][IM] = (double) data->buf8[i + 1] - 127;
-      data->inbuf[j/2 + 1][RE] = ((double) data->buf8[i+ 2] - 127) * -1;
-      data->inbuf[j/2 + 1][IM] = ((double) data->buf8[i + 3] - 127) * -1;
-      //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
-      j+=4;
+void fft(Datastore& data) {
+  int canary = 0;
+  while (true) {
+    int k = 0;
+    int buf_available = 0;
+    while (k < BUFFERS) {
+      if (data.buf_mutex[k].try_lock()) { 
+	if (data.buf_status[k] == 1) {
+	  buf_available = 1;
+	  break;
+	}
+	else {
+	  data.buf_mutex[k].unlock();
+	}
+      }
+      k++;
     }
-    fftw_execute(data->plan);
-    for (i=0; i < data->N; i++) {
-      data->pwr[i] += data->outbuf[i][RE] * data->outbuf[i][RE] + data->outbuf[i][IM] * data->outbuf[i][IM];	
+    if (buf_available == 1) {
+      int i;
+      int batch = 1;
+      while (batch <= data.batches && data.repeats_done < data.repeats) {
+	//std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
+	int j = 0;
+	for (i = 2*data.N*(batch-1) ; i < 2*data.N*batch - 1 ; i += 4) {
+	  //The magic aligment happens here: we have to change the phase of each next complex sample
+	  //by pi - this means that even numbered samples stay the same while odd numbered samples
+	  //get multiplied by -1 (thus rotated by pi in complex plane).
+	  //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+	  data.inbuf[j/2][RE] = (double) data.buffer_arr[k][i] - 127;
+	  data.inbuf[j/2][IM] = (double) data.buffer_arr[k][i + 1] - 127;
+	  data.inbuf[j/2 + 1][RE] = ((double) data.buffer_arr[k][i+ 2] - 127) * -1;
+	  data.inbuf[j/2 + 1][IM] = ((double) data.buffer_arr[k][i + 3] - 127) * -1;
+	  //printf("%i\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], w);
+	  j+=4;
+	}
+	fftw_execute(data.plan);
+	for (i=0; i < data.N; i++) {
+	  data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];	
+	}
+	batch++;
+	data.repeats_done++;
+      }
+      //Interpolate the central point, to cancel DC bias.
+      data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+      data.buf_status[k] = 0;
+      data.buf_mutex[k].unlock();
     }
-    batch++;
-    data->repeats_done++;
+    else {
+      if (canary == 1) {
+	break;
+      }
+      //usleep(500);
+      if (data.acquisition_done == 1) {
+	canary = 1;
+      }
+    }
   }
-  //Interpolate the central point, to cancel DC bias.
-  data->pwr[data->N/2] = (data->pwr[data->N/2 - 1] + data->pwr[data->N/2+1]) / 2;
 }
 
 int main(int argc, char **argv)
@@ -190,6 +232,7 @@ int main(int argc, char **argv)
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
   }
+  
   //Sanity checks
   //RTLSDR Device
   int num_of_rtls = rtlsdr_get_device_count();
@@ -202,6 +245,7 @@ int main(int argc, char **argv)
     return -2;
   } 
   r = rtlsdr_open(&dev, (uint32_t)dev_index);
+  
   //Available gains
   num_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
   gain_table = (int *) malloc(num_of_gains*sizeof(int));
@@ -211,17 +255,21 @@ int main(int argc, char **argv)
   std::cerr << "Selected nearest available gain: " << gain << std::endl;
   rtlsdr_set_tuner_gain_mode(dev, 1);
   rtlsdr_set_tuner_gain(dev, gain);
+  
   //Center frequency
   rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   int tuned_freq = rtlsdr_get_center_freq(dev);
   std::cerr << "Device tuned to: " << tuned_freq << " Hz." << std::endl;
   usleep(5000);
+  
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
+  
   //Print info on capture time
   std::cerr << "Number of averaged samples: " << repeats << "." << std::endl;
   std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds." << std::endl;
+  
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
   //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
   if (N % 256 != 0) {
@@ -236,26 +284,50 @@ int main(int argc, char **argv)
   if (overhang != 0) {
     buf_length = lcm(2*N, buf_length);
     scans = ceil((2*N*repeats)/buf_length);
-    batches = 16384/(2*N);
+    batches = buf_length/(2*N);
   }
   std::cerr << "Data collection will proceed in " << scans <<" scans, each consisting of " << batches << " batches." << std::endl;
+  
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, batches, repeats);
-  int count = 0;
   int i;
   for (i=0; i < N; i++) {
     data.pwr[i] = 0;
   }
+  
   //Read from device and do FFT
+  std::thread t(&fft, std::ref(data));
+  int count = 0;
   while (count <= scans) {
-    if (read_rtlsdr(&data)) {
-      fprintf(stderr, "Error: dropped samples.\n");
+    int i = 0;
+    int buf_available = 0;
+    while (i < BUFFERS) {
+      if (data.buf_mutex[i].try_lock()) { 
+	if (data.buf_status[i] == 0) {
+	  buf_available = 1;
+	  break;
+	}
+	else {
+	  data.buf_mutex[i].unlock();
+	}
+      }
+      i++;
     }
-    else {
-      fft(&data);
-      count++;
+    if (buf_available == 1) {
+      r = read_rtlsdr(data, i);
+      if (r) {
+	fprintf(stderr, "Error: dropped samples.\n");
+      }
+      else {
+	count++;
+	data.buf_status[i] = 1;
+      }
+      data.buf_mutex[i].unlock();
     }
   }
+  std::cerr << "Acquisition_done." << std::endl;
+  data.acquisition_done = 1;
+  t.join();
   //Write out.
   for (i=0; i < N; i++) {
     //printf("%i\t%g\t%g\t%g\t%g\t%g\n", i, inbuf[i][RE], inbuf[i][IM], outbuf[i][RE], outbuf[i][IM], pwr[i]);
