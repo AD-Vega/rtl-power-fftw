@@ -213,7 +213,7 @@ int main(int argc, char **argv)
     //Integration time
     if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
       std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
-      return -3;
+      return 3;
     }
     else if (arg_integration_time.isSet()) {
       repeats = (int)( (sample_rate * integration_time) / (double)N + 0.5 );
@@ -231,13 +231,17 @@ int main(int argc, char **argv)
   int num_of_rtls = rtlsdr_get_device_count();
   if (num_of_rtls == 0) {
     std::cerr << "Error: no RTL-SDR compatible devices found. Exiting." << std::endl;
-    return -1;
+    return 1;
   }
   if ( dev_index >= num_of_rtls) {
     std::cerr << "Error: invalid device number. Only "<< num_of_rtls << " devices available. Exiting." << std::endl;
-    return -2;
+    return 2;
   } 
   r = rtlsdr_open(&dev, (uint32_t)dev_index);
+  if (r < 0 ) {
+    std::cerr << "Could not open rtl_sdr device " << dev_index << "." << std::endl;
+    return r;
+  }
   
   //Available gains
   num_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
