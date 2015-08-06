@@ -37,12 +37,12 @@
 static rtlsdr_dev_t *dev = NULL;
 
 int gcd(int a, int b) {
-	if( b==0 ) return a;
-	return gcd(b, a%b);
+  if( b==0 ) return a;
+  return gcd(b, a%b);
 }
 
 int lcm(int a, int b){
-	return a*b / gcd(a,b);
+  return a*b / gcd(a,b);
 }
 
 class Datastore {
@@ -123,13 +123,13 @@ void fft(Datastore& data) {
     int buf_available = 0;
     while (k < BUFFERS) {
       if (data.buf_mutex[k].try_lock()) { 
-	if (data.buf_status[k] == 1) {
-	  buf_available = 1;
-	  break;
-	}
-	else {
-	  data.buf_mutex[k].unlock();
-	}
+        if (data.buf_status[k] == 1) {
+          buf_available = 1;
+          break;
+        }
+        else {
+          data.buf_mutex[k].unlock();
+        }
       }
       k++;
     }
@@ -137,25 +137,25 @@ void fft(Datastore& data) {
       int i;
       int batch = 1;
       while (batch <= data.batches && data.repeats_done < data.repeats) {
-	//std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
-	int j = 0;
-	for (i = 2*data.N*(batch-1) ; i < 2*data.N*batch - 1 ; i += 4) {
-	  //The magic aligment happens here: we have to change the phase of each next complex sample
-	  //by pi - this means that even numbered samples stay the same while odd numbered samples
-	  //get multiplied by -1 (thus rotated by pi in complex plane).
-	  //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-	  data.inbuf[j/2][RE] = (double) data.buffer_arr[k][i] - 127;
-	  data.inbuf[j/2][IM] = (double) data.buffer_arr[k][i + 1] - 127;
-	  data.inbuf[j/2 + 1][RE] = ((double) data.buffer_arr[k][i+ 2] - 127) * -1;
-	  data.inbuf[j/2 + 1][IM] = ((double) data.buffer_arr[k][i + 3] - 127) * -1;
-	  j+=4;
-	}
-	fftw_execute(data.plan);
-	for (i=0; i < data.N; i++) {
-	  data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];	
-	}
-	batch++;
-	data.repeats_done++;
+        //std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
+        int j = 0;
+        for (i = 2*data.N*(batch-1) ; i < 2*data.N*batch - 1 ; i += 4) {
+          //The magic aligment happens here: we have to change the phase of each next complex sample
+          //by pi - this means that even numbered samples stay the same while odd numbered samples
+          //get multiplied by -1 (thus rotated by pi in complex plane).
+          //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+          data.inbuf[j/2][RE] = (double) data.buffer_arr[k][i] - 127;
+          data.inbuf[j/2][IM] = (double) data.buffer_arr[k][i + 1] - 127;
+          data.inbuf[j/2 + 1][RE] = ((double) data.buffer_arr[k][i+ 2] - 127) * -1;
+          data.inbuf[j/2 + 1][IM] = ((double) data.buffer_arr[k][i + 3] - 127) * -1;
+          j+=4;
+        }
+        fftw_execute(data.plan);
+        for (i=0; i < data.N; i++) {
+          data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
+        }
+        batch++;
+        data.repeats_done++;
       }
       //Interpolate the central point, to cancel DC bias.
       data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
@@ -164,11 +164,11 @@ void fft(Datastore& data) {
     }
     else {
       if (canary == 1) {
-	break;
+        break;
       }
       //usleep(500);
       if (data.acquisition_done == 1) {
-	canary = 1;
+        canary = 1;
       }
     }
   }
@@ -304,25 +304,25 @@ int main(int argc, char **argv)
     int buf_available = 0;
     while (i < BUFFERS) {
       if (data.buf_mutex[i].try_lock()) { 
-	if (data.buf_status[i] == 0) {
-	  buf_available = 1;
+        if (data.buf_status[i] == 0) {
+          buf_available = 1;
           usage[i]++;
-	  break;
-	}
-	else {
-	  data.buf_mutex[i].unlock();
-	}
+          break;
+        }
+        else {
+          data.buf_mutex[i].unlock();
+        }
       }
       i++;
     }
     if (buf_available == 1) {
       r = read_rtlsdr(data, i);
       if (r) {
-	fprintf(stderr, "Error: dropped samples.\n");
+        fprintf(stderr, "Error: dropped samples.\n");
       }
       else {
-	count++;
-	data.buf_status[i] = 1;
+        count++;
+        data.buf_status[i] = 1;
       }
       data.buf_mutex[i].unlock();
     }
