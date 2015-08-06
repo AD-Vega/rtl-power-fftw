@@ -66,7 +66,6 @@ public:
 class Datastore {
   public:
     int N;
-    int buf_length;
     int batches;
     int repeats;
     int repeats_done;
@@ -79,6 +78,12 @@ class Datastore {
     Datastore(int N, int buf_length, int batches, int repeats);
     ~Datastore();
 
+    // Finds the first buffer with the specified status (readiness) and
+    // returns a pointer to it. The selected buffer is returned with its
+    // mutex locked and the caller is responsible for unlocking it.
+    // Returns nullptr if no suitable buffer could be found.
+    Buffer* find_buffer(bool ready);
+
     // Delete these so we don't accidentally mess anything up by copying
     // pointers to fftw_malloc'd buffers.
     Datastore(const Datastore&) = delete;
@@ -87,9 +92,9 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length_, int batches_, int repeats_) :
-  N(N_), buf_length(buf_length_), batches(batches_), repeats(repeats_),
-  repeats_done(0), acquisition_done(false), pwr(N)
+Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
+  N(N_), batches(batches_), repeats(repeats_), repeats_done(0),
+  acquisition_done(false), pwr(N)
 {
   buffers.reserve(BUFFERS);
   for (int i = 0; i < BUFFERS; i++)
@@ -107,6 +112,18 @@ Datastore::~Datastore() {
   fftw_destroy_plan(plan);
   fftw_free(inbuf);
   fftw_free(outbuf);
+}
+
+Buffer* Datastore::find_buffer(bool ready) {
+  for (auto& buffer : buffers) {
+    if (buffer->mutex.try_lock()) {
+      if (buffer->ready == ready)
+        return buffer;
+      else
+        buffer->mutex.unlock();
+    }
+  }
+  return nullptr;
 }
 
 int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
@@ -132,11 +149,11 @@ void print_gain_table(const std::vector<int>& gain_table) {
   std::cerr << std::endl;
 }
 
-int read_rtlsdr(Datastore& data, int buf) {
+int read_rtlsdr(Buffer& buffer) {
   int n_read;
   rtlsdr_reset_buffer(dev);
-  rtlsdr_read_sync(dev, data.buffers[buf]->array.data(), data.buf_length, &n_read);
-  if (n_read != data.buf_length) {
+  rtlsdr_read_sync(dev, buffer.array.data(), buffer.array.size(), &n_read);
+  if (n_read != (signed)buffer.array.size()) {
     //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
   }
@@ -147,18 +164,11 @@ void fft(Datastore& data) {
   bool do_exit = false;
   while (true) {
     // Try to find a ready buffer
-    int k = 0;
-    for (k = 0; k < BUFFERS; k++) {
-      if (data.buffers[k]->mutex.try_lock()) {
-        if (data.buffers[k]->ready) {
-          break;
-        }
-        else {
-          data.buffers[k]->mutex.unlock();
-        }
-      }
-    }
-    if (k < BUFFERS) {
+    Buffer* bufptr = data.find_buffer(true);
+    if (bufptr) {
+      Buffer& buffer = *bufptr;
+      std::lock_guard<std::mutex> lock(buffer.mutex, std::adopt_lock);
+
       for (int batch = 1;
            batch <= data.batches && data.repeats_done < data.repeats;
            batch++)
@@ -171,10 +181,10 @@ void fft(Datastore& data) {
           //by pi - this means that even numbered samples stay the same while odd numbered samples
           //get multiplied by -1 (thus rotated by pi in complex plane).
           //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-          data.inbuf[j/2][RE] = (double) (*data.buffers[k])[i] - 127;
-          data.inbuf[j/2][IM] = (double) (*data.buffers[k])[i + 1] - 127;
-          data.inbuf[j/2 + 1][RE] = ((double) (*data.buffers[k])[i + 2] - 127) * -1;
-          data.inbuf[j/2 + 1][IM] = ((double) (*data.buffers[k])[i + 3] - 127) * -1;
+          data.inbuf[j/2][RE] = (double) buffer[i] - 127;
+          data.inbuf[j/2][IM] = (double) buffer[i + 1] - 127;
+          data.inbuf[j/2 + 1][RE] = ((double) buffer[i + 2] - 127) * -1;
+          data.inbuf[j/2 + 1][IM] = ((double) buffer[i + 3] - 127) * -1;
         }
         fftw_execute(data.plan);
         for (int i = 0; i < data.N; i++) {
@@ -184,8 +194,7 @@ void fft(Datastore& data) {
       }
       //Interpolate the central point, to cancel DC bias.
       data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-      data.buffers[k]->ready = false;
-      data.buffers[k]->mutex.unlock();
+      buffer.ready = false;
     }
     else {
       if (do_exit) {
@@ -325,28 +334,19 @@ int main(int argc, char **argv)
   std::thread t(&fft, std::ref(data));
   int count = 0;
   while (count <= scans) {
-    int ibuf;
-    for (ibuf = 0; ibuf < BUFFERS; ibuf++) {
-      if (data.buffers[ibuf]->mutex.try_lock()) {
-        if (!data.buffers[ibuf]->ready) {
-          data.buffers[ibuf]->usage++;
-          break;
-        }
-        else {
-          data.buffers[ibuf]->mutex.unlock();
-        }
-      }
-    }
-    if (ibuf < BUFFERS) {
-      rtl_retval = read_rtlsdr(data, ibuf);
+    // Try to find an empty buffer
+    Buffer* bufptr = data.find_buffer(false);
+    if (bufptr) {
+      Buffer& buffer = *bufptr;
+      std::lock_guard<std::mutex> lock(buffer.mutex, std::adopt_lock);
+      rtl_retval = read_rtlsdr(buffer);
       if (rtl_retval) {
         fprintf(stderr, "Error: dropped samples.\n");
       }
       else {
         count++;
-        data.buffers[ibuf]->ready = true;
+        buffer.ready = true;
       }
-      data.buffers[ibuf]->mutex.unlock();
     }
   }
   std::cerr << "Acquisition_done." << std::endl;
