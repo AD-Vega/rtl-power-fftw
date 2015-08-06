@@ -52,6 +52,17 @@ int lcm(int a, int b){
   return a*b / gcd(a, b);
 }
 
+class Buffer {
+public:
+  std::vector<uint8_t> array;
+  bool ready = false;
+  int usage = 0;
+  std::mutex mutex;
+
+  Buffer(size_t length) : array(length) {}
+  uint8_t& operator[] (size_t n) { return array[n]; }
+};
+
 class Datastore {
   public:
     int N;
@@ -60,31 +71,36 @@ class Datastore {
     int repeats;
     int repeats_done;
     std::atomic<bool> acquisition_done;
-    bool buffer_ready[BUFFERS];
-    uint8_t *buffer_arr[BUFFERS];
-    std::mutex buf_mutex[BUFFERS];
-    //uint8_t *buf8;
+    std::vector<Buffer*> buffers;
     fftw_complex *inbuf, *outbuf;
     fftw_plan plan;
     double *pwr;
-    //std::mutex mu;
 
     Datastore(int N, int buf_length, int batches, int repeats);
+    ~Datastore();
 };
 
 Datastore::Datastore(int N_, int buf_length_, int batches_, int repeats_) :
   N(N_), buf_length(buf_length_), batches(batches_), repeats(repeats_),
   repeats_done(0), acquisition_done(false)
 {
-  for (int i = 0; i < BUFFERS; i++) {
-    buffer_arr[i] = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
-    buffer_ready[i] = false;
-  }
-  //buf8 = (uint8_t *) malloc (buf_length * sizeof(uint8_t));
+  buffers.reserve(BUFFERS);
+  for (int i = 0; i < BUFFERS; i++)
+    buffers.push_back(new Buffer(buf_length));
+
   inbuf = (fftw_complex *) malloc (N * sizeof(fftw_complex));
   outbuf = (fftw_complex *) malloc (N * sizeof(fftw_complex));
   pwr = (double *) malloc (N * sizeof(double));
   plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
+}
+
+Datastore::~Datastore() {
+  for (auto& buffer : buffers)
+    delete buffer;
+
+  fftw_destroy_plan(plan);
+  free(inbuf);
+  free(outbuf);
 }
 
 int select_nearest_gain(int gain, int size, int *gain_table) {
@@ -113,7 +129,7 @@ void print_gain_table(int size, int *gain_table) {
 int read_rtlsdr(Datastore& data, int buf) {
   int n_read;
   rtlsdr_reset_buffer(dev);
-  rtlsdr_read_sync(dev, data.buffer_arr[buf], data.buf_length, &n_read);
+  rtlsdr_read_sync(dev, data.buffers[buf]->array.data(), data.buf_length, &n_read);
   if (n_read != data.buf_length) {
     //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
@@ -127,12 +143,12 @@ void fft(Datastore& data) {
     // Try to find a ready buffer
     int k = 0;
     for (k = 0; k < BUFFERS; k++) {
-      if (data.buf_mutex[k].try_lock()) { 
-        if (data.buffer_ready[k]) {
+      if (data.buffers[k]->mutex.try_lock()) {
+        if (data.buffers[k]->ready) {
           break;
         }
         else {
-          data.buf_mutex[k].unlock();
+          data.buffers[k]->mutex.unlock();
         }
       }
     }
@@ -149,10 +165,10 @@ void fft(Datastore& data) {
           //by pi - this means that even numbered samples stay the same while odd numbered samples
           //get multiplied by -1 (thus rotated by pi in complex plane).
           //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-          data.inbuf[j/2][RE] = (double) data.buffer_arr[k][i] - 127;
-          data.inbuf[j/2][IM] = (double) data.buffer_arr[k][i + 1] - 127;
-          data.inbuf[j/2 + 1][RE] = ((double) data.buffer_arr[k][i + 2] - 127) * -1;
-          data.inbuf[j/2 + 1][IM] = ((double) data.buffer_arr[k][i + 3] - 127) * -1;
+          data.inbuf[j/2][RE] = (double) (*data.buffers[k])[i] - 127;
+          data.inbuf[j/2][IM] = (double) (*data.buffers[k])[i + 1] - 127;
+          data.inbuf[j/2 + 1][RE] = ((double) (*data.buffers[k])[i + 2] - 127) * -1;
+          data.inbuf[j/2 + 1][IM] = ((double) (*data.buffers[k])[i + 3] - 127) * -1;
         }
         fftw_execute(data.plan);
         for (int i = 0; i < data.N; i++) {
@@ -162,8 +178,8 @@ void fft(Datastore& data) {
       }
       //Interpolate the central point, to cancel DC bias.
       data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-      data.buffer_ready[k] = false;
-      data.buf_mutex[k].unlock();
+      data.buffers[k]->ready = false;
+      data.buffers[k]->mutex.unlock();
     }
     else {
       if (do_exit) {
@@ -300,21 +316,19 @@ int main(int argc, char **argv)
   for (int i = 0; i < N; i++) {
     data.pwr[i] = 0;
   }
-  //Buffer usage stats
-  int usage[BUFFERS] = {};
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
   int count = 0;
   while (count <= scans) {
     int ibuf;
     for (ibuf = 0; ibuf < BUFFERS; ibuf++) {
-      if (data.buf_mutex[ibuf].try_lock()) { 
-        if (!data.buffer_ready[ibuf]) {
-          usage[ibuf]++;
+      if (data.buffers[ibuf]->mutex.try_lock()) {
+        if (!data.buffers[ibuf]->ready) {
+          data.buffers[ibuf]->usage++;
           break;
         }
         else {
-          data.buf_mutex[ibuf].unlock();
+          data.buffers[ibuf]->mutex.unlock();
         }
       }
     }
@@ -325,9 +339,9 @@ int main(int argc, char **argv)
       }
       else {
         count++;
-        data.buffer_ready[ibuf] = true;
+        data.buffers[ibuf]->ready = true;
       }
-      data.buf_mutex[ibuf].unlock();
+      data.buffers[ibuf]->mutex.unlock();
     }
   }
   std::cerr << "Acquisition_done." << std::endl;
@@ -340,7 +354,8 @@ int main(int argc, char **argv)
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
   std::cerr << "Buffer usage: ";
-  for (auto i : usage) std::cerr << i << ", ";
+  for (const auto& buffer : data.buffers)
+    std::cerr << buffer->usage << ", ";
   std::cerr << std::endl;
   fftw_destroy_plan(data.plan);
   rtlsdr_close(dev);
