@@ -74,23 +74,29 @@ class Datastore {
     std::vector<Buffer*> buffers;
     fftw_complex *inbuf, *outbuf;
     fftw_plan plan;
-    double *pwr;
+    std::vector<double> pwr;
 
     Datastore(int N, int buf_length, int batches, int repeats);
     ~Datastore();
+
+    // Delete these so we don't accidentally mess anything up by copying
+    // pointers to fftw_malloc'd buffers.
+    Datastore(const Datastore&) = delete;
+    Datastore(Datastore&&) = delete;
+    Datastore& operator=(const Datastore&) = delete;
+    Datastore& operator=(Datastore&&) = delete;
 };
 
 Datastore::Datastore(int N_, int buf_length_, int batches_, int repeats_) :
   N(N_), buf_length(buf_length_), batches(batches_), repeats(repeats_),
-  repeats_done(0), acquisition_done(false)
+  repeats_done(0), acquisition_done(false), pwr(N)
 {
   buffers.reserve(BUFFERS);
   for (int i = 0; i < BUFFERS; i++)
     buffers.push_back(new Buffer(buf_length));
 
-  inbuf = (fftw_complex *) malloc (N * sizeof(fftw_complex));
-  outbuf = (fftw_complex *) malloc (N * sizeof(fftw_complex));
-  pwr = (double *) malloc (N * sizeof(double));
+  inbuf = fftw_alloc_complex(N);
+  outbuf = fftw_alloc_complex(N);
   plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
 }
 
@@ -99,26 +105,26 @@ Datastore::~Datastore() {
     delete buffer;
 
   fftw_destroy_plan(plan);
-  free(inbuf);
-  free(outbuf);
+  fftw_free(inbuf);
+  fftw_free(outbuf);
 }
 
-int select_nearest_gain(int gain, int size, int *gain_table) {
+int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
   int dif = std::numeric_limits<int>::max();
   int selected = 0;
-  for (int i = 0; i < size; i++) {
-    int temp = abs(gain_table[i] - gain);
+  for (const auto& trial_gain : gain_table) {
+    int temp = abs(trial_gain - gain);
     if ( temp < dif ) {
       dif = temp;
-      selected = gain_table[i];
+      selected = trial_gain;
     }
   }
   return selected;
 }
 
-void print_gain_table(int size, int *gain_table) {
+void print_gain_table(const std::vector<int>& gain_table) {
   std::cerr << "Available gains: ";
-  for (int i = 0; i < size; i++) {
+  for (unsigned int i = 0; i < gain_table.size(); i++) {
     if (i != 0)
       std::cerr << ", ";
     std::cerr << gain_table[i];
@@ -202,10 +208,9 @@ int main(int argc, char **argv)
   int cfreq = 89300000;
   int sample_rate = 2000000;
   int integration_time = 0;
-  int rtl_retval, num_of_gains, batches, overhang;
+  int rtl_retval, batches, overhang;
   int buf_length = 16384*100;
   double scans;
-  int *gain_table;
 
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
@@ -267,11 +272,11 @@ int main(int argc, char **argv)
   }
 
   //Available gains
-  num_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
-  gain_table = (int *) malloc(num_of_gains * sizeof(int));
-  rtlsdr_get_tuner_gains(dev, gain_table);
-  print_gain_table(num_of_gains, gain_table);
-  gain = select_nearest_gain(gain, num_of_gains, gain_table);
+  int number_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
+  std::vector<int> gain_table(number_of_gains);
+  rtlsdr_get_tuner_gains(dev, gain_table.data());
+  print_gain_table(gain_table);
+  gain = select_nearest_gain(gain, gain_table);
   std::cerr << "Selected nearest available gain: " << gain << std::endl;
   rtlsdr_set_tuner_gain_mode(dev, 1);
   rtlsdr_set_tuner_gain(dev, gain);
@@ -357,7 +362,6 @@ int main(int argc, char **argv)
   for (const auto& buffer : data.buffers)
     std::cerr << buffer->usage << ", ";
   std::cerr << std::endl;
-  fftw_destroy_plan(data.plan);
   rtlsdr_close(dev);
   return 0;
 }
