@@ -323,9 +323,8 @@ int main(int argc, char **argv)
 
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, batches, repeats);
-  for (int i = 0; i < N; i++) {
-    data.pwr[i] = 0;
-  }
+  std::fill(data.pwr.begin(), data.pwr.end(), 0);
+
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
   int count = 0;
