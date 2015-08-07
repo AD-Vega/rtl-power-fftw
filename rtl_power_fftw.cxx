@@ -23,6 +23,7 @@
 #include <limits>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include <string>
 #include <iostream>
 #include <algorithm>
@@ -55,7 +56,7 @@ int lcm(int a, int b){
 class Buffer {
 public:
   std::vector<uint8_t> array;
-  bool ready = false;
+  bool occupied = false;
   int usage = 0;
   std::mutex mutex;
 
@@ -68,9 +69,16 @@ class Datastore {
     int N;
     int batches;
     int repeats;
-    int repeats_done;
-    std::atomic<bool> acquisition_done;
+    int repeats_done = 0;
+
     std::vector<Buffer*> buffers;
+    std::mutex status_mutex;
+    // Access to the following variables must be protected by locking
+    // status_mutex.
+    int nbuffers_occupied = 0;
+    bool acquisition_finished = false;
+    std::condition_variable status_change;
+
     fftw_complex *inbuf, *outbuf;
     fftw_plan plan;
     std::vector<double> pwr;
@@ -78,11 +86,11 @@ class Datastore {
     Datastore(int N, int buf_length, int batches, int repeats);
     ~Datastore();
 
-    // Finds the first buffer with the specified status (readiness) and
-    // returns a pointer to it. The selected buffer is returned with its
-    // mutex locked and the caller is responsible for unlocking it.
+    // Finds the first buffer with the specified state and returns a pointer
+    // to it. The selected buffer is returned with its mutex locked and the
+    // caller is responsible for unlocking it.
     // Returns nullptr if no suitable buffer could be found.
-    Buffer* find_buffer(bool ready);
+    Buffer* find_buffer(bool occupied);
 
     // Delete these so we don't accidentally mess anything up by copying
     // pointers to fftw_malloc'd buffers.
@@ -93,8 +101,7 @@ class Datastore {
 };
 
 Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
-  N(N_), batches(batches_), repeats(repeats_), repeats_done(0),
-  acquisition_done(false), pwr(N)
+  N(N_), batches(batches_), repeats(repeats_), pwr(N)
 {
   buffers.reserve(BUFFERS);
   for (int i = 0; i < BUFFERS; i++)
@@ -114,10 +121,10 @@ Datastore::~Datastore() {
   fftw_free(outbuf);
 }
 
-Buffer* Datastore::find_buffer(bool ready) {
+Buffer* Datastore::find_buffer(bool occupied) {
   for (auto& buffer : buffers) {
     if (buffer->mutex.try_lock()) {
-      if (buffer->ready == ready)
+      if (buffer->occupied == occupied)
         return buffer;
       else
         buffer->mutex.unlock();
@@ -161,13 +168,25 @@ int read_rtlsdr(Buffer& buffer) {
 }
 
 void fft(Datastore& data) {
-  bool do_exit = false;
+  std::unique_lock<std::mutex>
+    status_lock(data.status_mutex, std::defer_lock);
+
   while (true) {
-    // Try to find a ready buffer
+    // Wait until we have a bufferful of data
+    status_lock.lock();
+    while (data.nbuffers_occupied == 0 && !data.acquisition_finished)
+      data.status_change.wait(status_lock);
+    if (data.nbuffers_occupied == 0) {
+      // acquisition finished
+      break;
+    }
+    status_lock.unlock();
+
+    // Try to find an occupied buffer
     Buffer* bufptr = data.find_buffer(true);
     if (bufptr) {
       Buffer& buffer = *bufptr;
-      std::lock_guard<std::mutex> lock(buffer.mutex, std::adopt_lock);
+      std::lock_guard<std::mutex> buf_lock(buffer.mutex, std::adopt_lock);
 
       for (int batch = 1;
            batch <= data.batches && data.repeats_done < data.repeats;
@@ -194,16 +213,12 @@ void fft(Datastore& data) {
       }
       //Interpolate the central point, to cancel DC bias.
       data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-      buffer.ready = false;
-    }
-    else {
-      if (do_exit) {
-        break;
-      }
-      //usleep(500);
-      if (data.acquisition_done) {
-        do_exit = true;
-      }
+      buffer.occupied = false;
+
+      status_lock.lock();
+      data.nbuffers_occupied--;
+      data.status_change.notify_all();
+      status_lock.unlock();
     }
   }
 }
@@ -327,9 +342,18 @@ int main(int argc, char **argv)
 
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
+
+  std::unique_lock<std::mutex>
+    status_lock(data.status_mutex, std::defer_lock);
   int count = 0;
   while (count <= readouts) {
-    // Try to find an empty buffer
+    // Wait until a buffer is empty
+    status_lock.lock();
+    while (data.nbuffers_occupied == BUFFERS)
+      data.status_change.wait(status_lock);
+    status_lock.unlock();
+
+    // Try to find the empty buffer
     Buffer* bufptr = data.find_buffer(false);
     if (bufptr) {
       Buffer& buffer = *bufptr;
@@ -341,13 +365,23 @@ int main(int argc, char **argv)
       }
       else {
         count++;
-        buffer.ready = true;
+        buffer.occupied = true;
+
+        status_lock.lock();
+        data.nbuffers_occupied++;
+        data.status_change.notify_all();
+        status_lock.unlock();
       }
     }
   }
   std::cerr << "Acquisition_done." << std::endl;
-  data.acquisition_done = true;
+
+  status_lock.lock();
+  data.acquisition_finished = true;
+  data.status_change.notify_all();
+  status_lock.unlock();
   t.join();
+
   //Write out.
   for (int i = 0; i < N; i++) {
     std::cout << i << " "
