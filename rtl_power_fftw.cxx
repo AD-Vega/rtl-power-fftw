@@ -334,6 +334,7 @@ int main(int argc, char **argv)
     if (bufptr) {
       Buffer& buffer = *bufptr;
       std::lock_guard<std::mutex> lock(buffer.mutex, std::adopt_lock);
+      buffer.usage++;
       rtl_retval = read_rtlsdr(buffer);
       if (rtl_retval) {
         fprintf(stderr, "Error: dropped samples.\n");
