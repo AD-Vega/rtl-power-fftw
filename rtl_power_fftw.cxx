@@ -217,9 +217,7 @@ int main(int argc, char **argv)
   int cfreq = 89300000;
   int sample_rate = 2000000;
   int integration_time = 0;
-  int rtl_retval, batches, overhang;
-  int buf_length = 16384*100;
-  double scans;
+  int rtl_retval;
 
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
@@ -301,7 +299,7 @@ int main(int argc, char **argv)
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
 
   //Print info on capture time
-  std::cerr << "Number of averaged samples: " << repeats << "." << std::endl;
+  std::cerr << "Number of averaged spectra: " << repeats << "." << std::endl;
   std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds." << std::endl;
 
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
@@ -314,16 +312,14 @@ int main(int argc, char **argv)
   std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
 
   // Due to USB specifics, buffer length for reading rtl_sdr device
-  // should be a multiple of 16384. We have to keep it that way.
-  scans = ceil((2.0*N*repeats)/buf_length);
-  batches = buf_length/(2*N);
-  overhang = buf_length % (2*N);
-  if (overhang != 0) {
-    buf_length = lcm(2*N, buf_length);
-    scans = ceil((2*N*repeats)/buf_length);
-    batches = buf_length/(2*N);
-  }
-  std::cerr << "Data collection will proceed in " << scans <<" scans, each consisting of " << batches << " batches." << std::endl;
+  // must be a multiple of 16384. We have to keep it that way.
+  // For performance reasons, the actual buffer length should be in the
+  // MB range.
+  // TODO: allow user control over the buffer length.
+  int buf_length = lcm(2*N, 16384*100);
+  int readouts = ceil(2.0 * N * repeats / buf_length);
+  int batches = buf_length / (2*N);
+  std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
 
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, batches, repeats);
@@ -333,7 +329,7 @@ int main(int argc, char **argv)
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
   int count = 0;
-  while (count <= scans) {
+  while (count <= readouts) {
     // Try to find an empty buffer
     Buffer* bufptr = data.find_buffer(false);
     if (bufptr) {
