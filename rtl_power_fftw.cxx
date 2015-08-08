@@ -28,6 +28,7 @@
 #include <iostream>
 #include <algorithm>
 #include <atomic>
+#include <deque>
 #include <tclap/CmdLine.h>
 //#include <libusb.h>
 #include <rtl-sdr.h>
@@ -53,16 +54,7 @@ int lcm(int a, int b){
   return a*b / gcd(a, b);
 }
 
-class Buffer {
-public:
-  std::vector<uint8_t> array;
-  bool occupied = false;
-  int usage = 0;
-  std::mutex mutex;
-
-  Buffer(size_t length) : array(length) {}
-  uint8_t& operator[] (size_t n) { return array[n]; }
-};
+using Buffer = std::vector<uint8_t>;
 
 class Datastore {
   public:
@@ -71,13 +63,14 @@ class Datastore {
     int repeats;
     int repeats_done = 0;
 
-    std::vector<Buffer*> buffers;
     std::mutex status_mutex;
-    // Access to the following variables must be protected by locking
-    // status_mutex.
-    int nbuffers_occupied = 0;
+    // Access to the following objects must be protected by locking
+    // buffer_mutex.
+    std::deque<Buffer*> empty_buffers;
+    std::deque<Buffer*> occupied_buffers;
     bool acquisition_finished = false;
     std::condition_variable status_change;
+    std::vector<int> queue_histogram;
 
     fftw_complex *inbuf, *outbuf;
     fftw_plan plan;
@@ -85,12 +78,6 @@ class Datastore {
 
     Datastore(int N, int buf_length, int batches, int repeats);
     ~Datastore();
-
-    // Finds the first buffer with the specified state and returns a pointer
-    // to it. The selected buffer is returned with its mutex locked and the
-    // caller is responsible for unlocking it.
-    // Returns nullptr if no suitable buffer could be found.
-    Buffer* find_buffer(bool occupied);
 
     // Delete these so we don't accidentally mess anything up by copying
     // pointers to fftw_malloc'd buffers.
@@ -101,11 +88,11 @@ class Datastore {
 };
 
 Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
-  N(N_), batches(batches_), repeats(repeats_), pwr(N)
+  N(N_), batches(batches_), repeats(repeats_),
+  queue_histogram(BUFFERS+1, 0), pwr(N)
 {
-  buffers.reserve(BUFFERS);
   for (int i = 0; i < BUFFERS; i++)
-    buffers.push_back(new Buffer(buf_length));
+    empty_buffers.push_back(new Buffer(buf_length));
 
   inbuf = fftw_alloc_complex(N);
   outbuf = fftw_alloc_complex(N);
@@ -113,24 +100,15 @@ Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
 }
 
 Datastore::~Datastore() {
-  for (auto& buffer : buffers)
+  for (auto& buffer : empty_buffers)
+    delete buffer;
+
+  for (auto& buffer : occupied_buffers)
     delete buffer;
 
   fftw_destroy_plan(plan);
   fftw_free(inbuf);
   fftw_free(outbuf);
-}
-
-Buffer* Datastore::find_buffer(bool occupied) {
-  for (auto& buffer : buffers) {
-    if (buffer->mutex.try_lock()) {
-      if (buffer->occupied == occupied)
-        return buffer;
-      else
-        buffer->mutex.unlock();
-    }
-  }
-  return nullptr;
 }
 
 int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
@@ -159,8 +137,8 @@ void print_gain_table(const std::vector<int>& gain_table) {
 int read_rtlsdr(Buffer& buffer) {
   int n_read;
   rtlsdr_reset_buffer(dev);
-  rtlsdr_read_sync(dev, buffer.array.data(), buffer.array.size(), &n_read);
-  if (n_read != (signed)buffer.array.size()) {
+  rtlsdr_read_sync(dev, buffer.data(), buffer.size(), &n_read);
+  if (n_read != (signed)buffer.size()) {
     //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
   }
@@ -174,52 +152,46 @@ void fft(Datastore& data) {
   while (true) {
     // Wait until we have a bufferful of data
     status_lock.lock();
-    while (data.nbuffers_occupied == 0 && !data.acquisition_finished)
+    while (data.occupied_buffers.empty() && !data.acquisition_finished)
       data.status_change.wait(status_lock);
-    if (data.nbuffers_occupied == 0) {
+    if (data.occupied_buffers.empty()) {
       // acquisition finished
       break;
     }
+    Buffer& buffer(*data.occupied_buffers.front());
+    data.occupied_buffers.pop_front();
     status_lock.unlock();
 
-    // Try to find an occupied buffer
-    Buffer* bufptr = data.find_buffer(true);
-    if (bufptr) {
-      Buffer& buffer = *bufptr;
-      std::lock_guard<std::mutex> buf_lock(buffer.mutex, std::adopt_lock);
-
-      for (int batch = 1;
-           batch <= data.batches && data.repeats_done < data.repeats;
-           batch++)
-      {
-        //std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
-        for (int i = 2*data.N*(batch-1), j = 0;
-             i < 2*data.N*batch - 1;
-             i += 4, j += 4) {
-          //The magic aligment happens here: we have to change the phase of each next complex sample
-          //by pi - this means that even numbered samples stay the same while odd numbered samples
-          //get multiplied by -1 (thus rotated by pi in complex plane).
-          //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-          data.inbuf[j/2][RE] = (double) buffer[i] - 127;
-          data.inbuf[j/2][IM] = (double) buffer[i + 1] - 127;
-          data.inbuf[j/2 + 1][RE] = ((double) buffer[i + 2] - 127) * -1;
-          data.inbuf[j/2 + 1][IM] = ((double) buffer[i + 3] - 127) * -1;
-        }
-        fftw_execute(data.plan);
-        for (int i = 0; i < data.N; i++) {
-          data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
-        }
-        data.repeats_done++;
+    for (int batch = 1;
+          batch <= data.batches && data.repeats_done < data.repeats;
+          batch++)
+    {
+      //std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
+      for (int i = 2*data.N*(batch-1), j = 0;
+            i < 2*data.N*batch - 1;
+            i += 4, j += 4) {
+        //The magic aligment happens here: we have to change the phase of each next complex sample
+        //by pi - this means that even numbered samples stay the same while odd numbered samples
+        //get multiplied by -1 (thus rotated by pi in complex plane).
+        //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+        data.inbuf[j/2][RE] = (double) buffer[i] - 127;
+        data.inbuf[j/2][IM] = (double) buffer[i + 1] - 127;
+        data.inbuf[j/2 + 1][RE] = ((double) buffer[i + 2] - 127) * -1;
+        data.inbuf[j/2 + 1][IM] = ((double) buffer[i + 3] - 127) * -1;
       }
-      //Interpolate the central point, to cancel DC bias.
-      data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-      buffer.occupied = false;
-
-      status_lock.lock();
-      data.nbuffers_occupied--;
-      data.status_change.notify_all();
-      status_lock.unlock();
+      fftw_execute(data.plan);
+      for (int i = 0; i < data.N; i++) {
+        data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
+      }
+      data.repeats_done++;
     }
+    //Interpolate the central point, to cancel DC bias.
+    data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+
+    status_lock.lock();
+    data.empty_buffers.push_back(&buffer);
+    data.status_change.notify_all();
+    status_lock.unlock();
   }
 }
 
@@ -349,29 +321,30 @@ int main(int argc, char **argv)
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
-    while (data.nbuffers_occupied == BUFFERS)
+    while (data.empty_buffers.empty())
       data.status_change.wait(status_lock);
+
+    data.queue_histogram[data.empty_buffers.size()]++;
+    Buffer& buffer(*data.empty_buffers.front());
+    data.empty_buffers.pop_front();
     status_lock.unlock();
 
-    // Try to find the empty buffer
-    Buffer* bufptr = data.find_buffer(false);
-    if (bufptr) {
-      Buffer& buffer = *bufptr;
-      std::lock_guard<std::mutex> lock(buffer.mutex, std::adopt_lock);
-      buffer.usage++;
-      rtl_retval = read_rtlsdr(buffer);
-      if (rtl_retval) {
-        fprintf(stderr, "Error: dropped samples.\n");
-      }
-      else {
-        count++;
-        buffer.occupied = true;
+    rtl_retval = read_rtlsdr(buffer);
 
-        status_lock.lock();
-        data.nbuffers_occupied++;
-        data.status_change.notify_all();
-        status_lock.unlock();
-      }
+    if (rtl_retval) {
+      fprintf(stderr, "Error: dropped samples.\n");
+      // There is effectively no data in this buffer - consider it empty.
+      status_lock.lock();
+      data.empty_buffers.push_back(&buffer);
+      status_lock.unlock();
+      // No need to notify the worker thread in this case.
+    }
+    else {
+      count++;
+      status_lock.lock();
+      data.occupied_buffers.push_back(&buffer);
+      data.status_change.notify_all();
+      status_lock.unlock();
     }
   }
   std::cerr << "Acquisition_done." << std::endl;
@@ -388,9 +361,9 @@ int main(int argc, char **argv)
               << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
-  std::cerr << "Buffer usage: ";
-  for (const auto& buffer : data.buffers)
-    std::cerr << buffer->usage << ", ";
+  std::cerr << "Acquisition buffer histogram: ";
+  for (auto size : data.queue_histogram)
+    std::cerr << size << " ";
   std::cerr << std::endl;
   rtlsdr_close(dev);
   return 0;
