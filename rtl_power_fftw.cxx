@@ -321,10 +321,10 @@ int main(int argc, char **argv)
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
+    data.queue_histogram[data.empty_buffers.size()]++;
     while (data.empty_buffers.empty())
       data.status_change.wait(status_lock);
 
-    data.queue_histogram[data.empty_buffers.size()]++;
     Buffer& buffer(*data.empty_buffers.front());
     data.empty_buffers.pop_front();
     status_lock.unlock();
