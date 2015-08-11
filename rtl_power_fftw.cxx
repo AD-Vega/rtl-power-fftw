@@ -20,6 +20,7 @@
 #include <math.h>
 #include <fftw3.h>
 #include <stdlib.h>
+#include <time.h>
 #include <limits>
 #include <thread>
 #include <mutex>
@@ -42,10 +43,22 @@
 
 static rtlsdr_dev_t *dev = NULL;
 
+// Get current date/time, format is YYYY-MM-DD.HH:mm:ss
+const std::string currentDateTime() {
+  time_t     now = time(0);
+  struct tm  tstruct;
+  char       buf[80];
+  tstruct = *localtime(&now);
+  // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
+  // for more information about date/time format
+  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+  return buf;
+}
+
 // Greatest common denominator
 int gcd(int a, int b) {
   if (b == 0)
-      return a;
+    return a;
   return gcd(b, a % b);
 }
 
@@ -205,6 +218,7 @@ int main(int argc, char **argv)
   int sample_rate = 2000000;
   int integration_time = 0;
   int rtl_retval;
+  std::string begining, end;
 
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
@@ -318,6 +332,7 @@ int main(int argc, char **argv)
   std::unique_lock<std::mutex>
     status_lock(data.status_mutex, std::defer_lock);
   int count = 0;
+  begining = currentDateTime();
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
@@ -347,7 +362,8 @@ int main(int argc, char **argv)
       status_lock.unlock();
     }
   }
-  std::cerr << "Acquisition_done." << std::endl;
+  end = currentDateTime();
+  std::cerr << "Acquisition_done at " << end << std::endl;
 
   status_lock.lock();
   data.acquisition_finished = true;
@@ -356,6 +372,9 @@ int main(int argc, char **argv)
   t.join();
 
   //Write out.
+  std::cout << "# rtl-power-fftw output" << std::endl;
+  std::cout << "# Acquisition start: " << begining << std::endl;
+  std::cout << "# Acquisition end: " << end << std::endl;
   for (int i = 0; i < N; i++) {
     std::cout << i << " "
               << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
