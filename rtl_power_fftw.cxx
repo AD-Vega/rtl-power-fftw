@@ -43,15 +43,11 @@
 
 static rtlsdr_dev_t *dev = NULL;
 
-// Get current date/time, format is YYYY-MM-DD.HH:mm:ss
+// Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 const std::string currentDateTime() {
-  time_t     now = time(0);
-  struct tm  tstruct;
-  char       buf[80];
-  tstruct = *localtime(&now);
-  // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
-  // for more information about date/time format
-  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+  time_t now = time(0);
+  char buf[80];
+  strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", gmtime(&now));
   return buf;
 }
 
@@ -218,7 +214,6 @@ int main(int argc, char **argv)
   int sample_rate = 2000000;
   int integration_time = 0;
   int rtl_retval;
-  std::string begining, end;
 
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
@@ -329,10 +324,13 @@ int main(int argc, char **argv)
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
 
+  // Record the start-of-acquisition timestamp.
+  std::string startAcqTimestamp = currentDateTime();
+  std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+
   std::unique_lock<std::mutex>
     status_lock(data.status_mutex, std::defer_lock);
   int count = 0;
-  begining = currentDateTime();
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
@@ -362,8 +360,9 @@ int main(int argc, char **argv)
       status_lock.unlock();
     }
   }
-  end = currentDateTime();
-  std::cerr << "Acquisition_done at " << end << std::endl;
+  // Record the start-of-acquisition timestamp.
+  std::string endAcqTimestamp = currentDateTime();
+  std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
   status_lock.lock();
   data.acquisition_finished = true;
@@ -373,17 +372,20 @@ int main(int argc, char **argv)
 
   //Write out.
   std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << begining << std::endl;
-  std::cout << "# Acquisition end: " << end << std::endl;
+  std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
+  std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
+  std::cout << "#" << std::endl;
   for (int i = 0; i < N; i++) {
     std::cout << i << " "
               << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
+
   std::cerr << "Acquisition buffer histogram: ";
   for (auto size : data.queue_histogram)
     std::cerr << size << " ";
   std::cerr << std::endl;
+
   rtlsdr_close(dev);
   return 0;
 }
