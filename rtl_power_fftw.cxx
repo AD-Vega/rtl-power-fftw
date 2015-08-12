@@ -375,9 +375,9 @@ int main(int argc, char **argv)
   std::cout << "# rtl-power-fftw output" << std::endl;
   std::cout << "# Acquisition start: " << begining << std::endl;
   std::cout << "# Acquisition end: " << end << std::endl;
+  std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
   for (int i = 0; i < N; i++) {
-    std::cout << i << " "
-              << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
+    std::cout << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
   std::cerr << "Acquisition buffer histogram: ";
