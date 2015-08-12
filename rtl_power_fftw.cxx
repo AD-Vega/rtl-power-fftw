@@ -16,25 +16,23 @@
 * You should have received a copy of the GNU General Public License
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-#include <unistd.h>
-#include <stdio.h>
-#include <math.h>
-#include <fftw3.h>
-#include <stdlib.h>
-#include <time.h>
-#include <limits>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <string>
-#include <iostream>
 #include <algorithm>
-#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <deque>
-#include <tclap/CmdLine.h>
-//#include <libusb.h>
+#include <iostream>
+#include <limits>
+#include <mutex>
+#include <string>
+#include <thread>
+
+#include <fftw3.h>
 #include <rtl-sdr.h>
-//#include <rtl-sdr/convenience/convenience.h>
+#include <tclap/CmdLine.h>
 
 // Indices of real and imaginary parts of complex numbers; for convenience.
 #define RE 0
@@ -290,7 +288,7 @@ int main(int argc, char **argv)
   rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   int tuned_freq = rtlsdr_get_center_freq(dev);
   std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
-  usleep(5000);
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
