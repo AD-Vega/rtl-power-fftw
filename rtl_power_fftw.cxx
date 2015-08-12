@@ -39,7 +39,7 @@
 #define RE 0
 #define IM 1
 
-#define BUFFERS 5
+//#define BUFFERS 5
 
 static rtlsdr_dev_t *dev = NULL;
 
@@ -75,6 +75,7 @@ class Datastore {
     int batches;
     int repeats;
     int repeats_done = 0;
+    int BUFFERS;
 
     std::mutex status_mutex;
     // Access to the following objects must be protected by locking
@@ -89,7 +90,7 @@ class Datastore {
     fftw_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int batches, int repeats);
+    Datastore(int N, int buf_length, int batches, int repeats, int BUFFERS);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -100,9 +101,9 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
-  N(N_), batches(batches_), repeats(repeats_),
-  queue_histogram(BUFFERS+1, 0), pwr(N)
+Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_, int BUFFERS_) :
+  N(N_), batches(batches_), repeats(repeats_), BUFFERS(BUFFERS_),
+  queue_histogram(BUFFERS_+1, 0), pwr(N)
 {
   for (int i = 0; i < BUFFERS; i++)
     empty_buffers.push_back(new Buffer(buf_length));
@@ -218,6 +219,8 @@ int main(int argc, char **argv)
   int sample_rate = 2000000;
   int integration_time = 0;
   int rtl_retval;
+  int BUFFERS = 5;
+  int buf_length = 16384*100;
   std::string begining, end;
 
   try {
@@ -236,6 +239,10 @@ int main(int argc, char **argv)
     cmd.add( arg_integration_time );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,0,"device index");
     cmd.add( arg_index );
+    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,5,"buffers");
+    cmd.add( arg_buffers );
+    TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, 1638400, "bytes");
+    cmd.add( arg_bufferlen );
 
     cmd.parse(argc, argv);
 
@@ -256,6 +263,10 @@ int main(int argc, char **argv)
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
     sample_rate = arg_rate.getValue();
+    if (arg_buffers.isSet())
+      BUFFERS = arg_buffers.getValue();
+    if (arg_bufferlen.isSet())
+      buf_length = arg_bufferlen.getValue();
   }
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
@@ -316,14 +327,13 @@ int main(int argc, char **argv)
   // must be a multiple of 16384. We have to keep it that way.
   // For performance reasons, the actual buffer length should be in the
   // MB range.
-  // TODO: allow user control over the buffer length.
-  int buf_length = lcm(2*N, 16384*100);
+  buf_length = lcm(2*N, buf_length);
   int readouts = ceil(2.0 * N * repeats / buf_length);
   int batches = buf_length / (2*N);
   std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
 
   //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, batches, repeats);
+  Datastore data(N, buf_length, batches, repeats, BUFFERS);
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT

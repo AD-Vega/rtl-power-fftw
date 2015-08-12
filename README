@@ -86,7 +86,6 @@ The install bit of the cmake is still in the TODO phase...
 
 TODO:
 - cmake install/uninstall
-- options to control buffers (number and size)
 - ... (there's allways something, isn't it?!)
 
 Many thanks to Andrej Lajovic for cleaning up the C++ code and implementing a
