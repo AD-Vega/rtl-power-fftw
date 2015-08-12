@@ -1,6 +1,7 @@
 /*
 * rtl_power_fftw, program for calculating power spectrum from rtl-sdr reciever.
 * Copyright (C) 2015 Klemen Blokar <klemen.blokar@ad-vega.si>
+*                    Andrej Lajovic <andrej.lajovic@ad-vega.si>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -134,7 +135,7 @@ int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
 }
 
 void print_gain_table(const std::vector<int>& gain_table) {
-  std::cerr << "Available gains: ";
+  std::cerr << "Available gains (in 1/10th of dB): ";
   for (unsigned int i = 0; i < gain_table.size(); i++) {
     if (i != 0)
       std::cerr << ", ";
@@ -280,14 +281,15 @@ int main(int argc, char **argv)
   rtlsdr_get_tuner_gains(dev, gain_table.data());
   print_gain_table(gain_table);
   gain = select_nearest_gain(gain, gain_table);
-  std::cerr << "Selected nearest available gain: " << gain << std::endl;
+  std::cerr << "Selected nearest available gain: " << gain
+            << " (" << 0.1*gain << " dB)" << std::endl;
   rtlsdr_set_tuner_gain_mode(dev, 1);
   rtlsdr_set_tuner_gain(dev, gain);
 
   //Center frequency
   rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   int tuned_freq = rtlsdr_get_center_freq(dev);
-  std::cerr << "Device tuned to: " << tuned_freq << " Hz." << std::endl;
+  std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   usleep(5000);
 
   //Sample rate
@@ -295,8 +297,8 @@ int main(int argc, char **argv)
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
 
   //Print info on capture time
-  std::cerr << "Number of averaged spectra: " << repeats << "." << std::endl;
-  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds." << std::endl;
+  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
+  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds" << std::endl;
 
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
   //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
@@ -381,7 +383,7 @@ int main(int argc, char **argv)
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
 
-  std::cerr << "Acquisition buffer histogram: ";
+  std::cerr << "Buffer queue histogram: ";
   for (auto size : data.queue_histogram)
     std::cerr << size << " ";
   std::cerr << std::endl;
