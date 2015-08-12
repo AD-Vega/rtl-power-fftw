@@ -204,6 +204,25 @@ void fft(Datastore& data) {
   }
 }
 
+class NegativeArgException {
+public:
+  NegativeArgException(std::string msg_) : msg(msg_) {}
+  std::string what() const { return msg; }
+private:
+  std::string msg;
+};
+
+template <typename T>
+void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
+  for (auto arg : list) {
+    if (arg->isSet() && arg->getValue() < 0) {
+      std::ostringstream message;
+      message << "Argument to '" << arg->getName() << "' must be a positive number.";
+      throw NegativeArgException(message.str());
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   int N = 512;
@@ -233,6 +252,16 @@ int main(int argc, char **argv)
     cmd.add( arg_index );
 
     cmd.parse(argc, argv);
+
+    try {
+      // Ain't this C++11 f**** magic? Watch this:
+      ensure_positive_arg<int>({&arg_bins, &arg_freq, &arg_rate, &arg_gain, &arg_integration_time, &arg_index});
+      ensure_positive_arg<int64_t>({&arg_repeats});
+    }
+    catch (NegativeArgException& e) {
+      std::cerr << e.what() << std::endl;
+      return 3;
+    }
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
