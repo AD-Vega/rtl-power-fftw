@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -68,8 +69,8 @@ class Datastore {
   public:
     int N;
     int batches;
-    int repeats;
-    int repeats_done = 0;
+    int64_t repeats;
+    int64_t repeats_done = 0;
 
     std::mutex status_mutex;
     // Access to the following objects must be protected by locking
@@ -84,7 +85,7 @@ class Datastore {
     fftw_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int batches, int repeats);
+    Datastore(int N, int buf_length, int batches, int64_t repeats);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -95,7 +96,7 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_) :
+Datastore::Datastore(int N_, int buf_length, int batches_, int64_t repeats_) :
   N(N_), batches(batches_), repeats(repeats_),
   queue_histogram(BUFFERS+1, 0), pwr(N)
 {
@@ -206,7 +207,7 @@ void fft(Datastore& data) {
 int main(int argc, char **argv)
 {
   int N = 512;
-  int repeats = 1;
+  int64_t repeats = 1;
   int dev_index = 0;
   int gain = 372;
   int cfreq = 89300000;
@@ -224,7 +225,7 @@ int main(int argc, char **argv)
     cmd.add( arg_rate );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
-    TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
+    TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
@@ -235,6 +236,10 @@ int main(int argc, char **argv)
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
+    gain = arg_gain.getValue();
+    cfreq = arg_freq.getValue();
+    sample_rate = arg_rate.getValue();
+
     if (arg_repeats.isSet())
         repeats = arg_repeats.getValue();
     if (arg_integration_time.isSet())
@@ -245,11 +250,8 @@ int main(int argc, char **argv)
       return 3;
     }
     else if (arg_integration_time.isSet()) {
-      repeats = (int)( (sample_rate * integration_time) / (double)N + 0.5 );
+      repeats = ceil((double)sample_rate * integration_time / N);
     }
-    gain = arg_gain.getValue();
-    cfreq = arg_freq.getValue();
-    sample_rate = arg_rate.getValue();
   }
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
@@ -301,7 +303,7 @@ int main(int argc, char **argv)
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
   //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
   if (N % 256 != 0) {
-    N = ((floor(N/256.0))+1)*256;
+    N = (floor(N/256.0)+1)*256;
     std::cerr << "Number of bins should be multiple of 256, changing to " << N << "." << std::endl;
   }
   std::cerr << "Number of bins: " << N << std::endl;
@@ -313,7 +315,7 @@ int main(int argc, char **argv)
   // MB range.
   // TODO: allow user control over the buffer length.
   int buf_length = lcm(2*N, 16384*100);
-  int readouts = ceil(2.0 * N * repeats / buf_length);
+  int64_t readouts = ceil(2.0 * N * repeats / buf_length);
   int batches = buf_length / (2*N);
   std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
 
@@ -330,7 +332,7 @@ int main(int argc, char **argv)
 
   std::unique_lock<std::mutex>
     status_lock(data.status_mutex, std::defer_lock);
-  int count = 0;
+  int64_t count = 0;
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
