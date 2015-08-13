@@ -32,12 +32,18 @@ This is the current state of what the program supports:
 
 USAGE: 
 
-   ./rtl_power_fftw  [-d <device index>] [-t <seconds>] [-n <repeats>] [-g
-                     <1/10th of dB>] [-r <samples/s>] [-f <Hz>] [-b <bins
-                     in FFT spectrum>] [--] [--version] [-h]
-
+   ./rtl_power_fftw  [-s <bytes>] [-B <buffers>] [-d <device index>] [-t
+                     <seconds>] [-n <repeats>] [-g <1/10th of dB>] [-r
+                     <samples/s>] [-f <Hz>] [-b <bins in FFT spectrum>]
+                     [--] [--version] [-h]
 
 Where: 
+
+   -s <bytes>,  --buffer-size <bytes>
+     Size of read buffers (leave it unless you know what you are doing).
+
+   -B <buffers>,  --buffers <buffers>
+     Number of read buffers (don't touch unless running out of memory).
 
    -d <device index>,  --device <device index>
      RTL-SDR device index.
@@ -71,7 +77,7 @@ Where:
 
 Example use of rtl_power_fftw with gnuplot to draw spectrum in a png file:
 ./rtl_power_fftw -f 1420000000 -n 100 -b 512 |\
-gnuplot -e "set term png;plot '< cat -' u 2:3">neki.png
+gnuplot -e "set term png;plot '< cat -' u 2:3">plot.png
 
 To compile the program, cd into the directory where you have cloned the code
 and do:

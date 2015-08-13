@@ -291,10 +291,8 @@ int main(int argc, char **argv)
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
     sample_rate = arg_rate.getValue();
-    if (arg_buffers.isSet())
-      BUFFERS = arg_buffers.getValue();
-    if (arg_bufferlen.isSet())
-      buf_length = arg_bufferlen.getValue();
+    BUFFERS = arg_buffers.getValue();
+    buf_length = arg_bufferlen.getValue();
   }
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
