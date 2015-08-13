@@ -66,7 +66,6 @@ using Buffer = std::vector<uint8_t>;
 class Datastore {
   public:
     int N;
-    int batches;
     int buffers;
     int64_t repeats;
     int64_t repeats_done = 0;
@@ -84,7 +83,7 @@ class Datastore {
     fftw_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int batches, int64_t repeats, int buffers);
+    Datastore(int N, int buf_length, int64_t repeats, int buffers);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -95,8 +94,8 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length, int batches_, int64_t repeats_, int buffers_) :
-  N(N_), batches(batches_), buffers(buffers_), repeats(repeats_), 
+Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
+  N(N_), buffers(buffers_), repeats(repeats_),
   queue_histogram(buffers_+1, 0), pwr(N)
 {
   for (int i = 0; i < buffers; i++)
@@ -156,7 +155,7 @@ int read_rtlsdr(Buffer& buffer) {
 void fft(Datastore& data) {
   std::unique_lock<std::mutex>
     status_lock(data.status_mutex, std::defer_lock);
-
+  int fft_pointer = 0;
   while (true) {
     // Wait until we have a bufferful of data
     status_lock.lock();
@@ -169,32 +168,34 @@ void fft(Datastore& data) {
     Buffer& buffer(*data.occupied_buffers.front());
     data.occupied_buffers.pop_front();
     status_lock.unlock();
-
-    for (int batch = 1;
-          batch <= data.batches && data.repeats_done < data.repeats;
-          batch++)
-    {
-      //std::cerr << "Processing repeat "<< data.repeats_done <<" of " << data.repeats << "in batch " << batch << "."<< std::endl;
-      for (int i = 2*data.N*(batch-1), j = 0;
-            i < 2*data.N*batch - 1;
-            i += 4, j += 4) {
+    //A neat new loop to avoid having to have data buffer aligned with fft buffer.
+    unsigned int buffer_pointer = 0;
+    while (buffer_pointer < buffer.size() && data.repeats_done < data.repeats ) {
+      while (fft_pointer < data.N && buffer_pointer < buffer.size()) {
         //The magic aligment happens here: we have to change the phase of each next complex sample
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-        data.inbuf[j/2][RE] = (double) buffer[i] - 127;
-        data.inbuf[j/2][IM] = (double) buffer[i + 1] - 127;
-        data.inbuf[j/2 + 1][RE] = ((double) buffer[i + 2] - 127) * -1;
-        data.inbuf[j/2 + 1][IM] = ((double) buffer[i + 3] - 127) * -1;
+        if (fft_pointer % 2 == 0) {
+          data.inbuf[fft_pointer][RE] = (double) buffer[buffer_pointer] - 127;
+          data.inbuf[fft_pointer][IM] = (double) buffer[buffer_pointer + 1] - 127;
+        }
+        else {
+          data.inbuf[fft_pointer][RE] = ((double) buffer[buffer_pointer] - 127) * -1;
+          data.inbuf[fft_pointer][IM] = ((double) buffer[buffer_pointer + 1] - 127) * -1;
+        }
+        buffer_pointer += 2;
+        fft_pointer++;
       }
-      fftw_execute(data.plan);
-      for (int i = 0; i < data.N; i++) {
-        data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
+      if (fft_pointer == data.N) {
+        fftw_execute(data.plan);
+        for (int i = 0; i < data.N; i++) {
+          data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
+        }
+        data.repeats_done++;
+        fft_pointer = 0;
       }
-      data.repeats_done++;
     }
-    //Interpolate the central point, to cancel DC bias.
-    data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
 
     status_lock.lock();
     data.empty_buffers.push_back(&buffer);
@@ -225,19 +226,20 @@ void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
 int main(int argc, char **argv)
 {
   int N = 512;
-  int64_t repeats = 1;
   int dev_index = 0;
   int gain = 372;
   int cfreq = 89300000;
   int sample_rate = 2000000;
   int integration_time = 0;
+  int integration_time_isSet = 0;
   int rtl_retval;
   int buffers = 5;
   int buf_length = 16384*100;
-
+  //It is senseless to waste a full buffer of data unless instructed to do so.
+  int64_t repeats = buf_length/N;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be multiple of 256)",false,N,"bins in FFT spectrum");
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
     cmd.add( arg_bins );
     TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,cfreq,"Hz");
     cmd.add( arg_freq );
@@ -277,16 +279,14 @@ int main(int argc, char **argv)
     buf_length = arg_bufferlen.getValue();
     
     if (arg_repeats.isSet())
-        repeats = arg_repeats.getValue();
+      repeats = arg_repeats.getValue();
     if (arg_integration_time.isSet())
-        integration_time = arg_integration_time.getValue();
+      integration_time = arg_integration_time.getValue();
+      integration_time_isSet = 1;
     //Integration time
     if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
       std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
       return 3;
-    }
-    else if (arg_integration_time.isSet()) {
-      repeats = ceil((double)sample_rate * integration_time / N);
     }
   }
   catch (TCLAP::ArgException &e) { 
@@ -331,31 +331,33 @@ int main(int argc, char **argv)
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
-
-  //Print info on capture time
-  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
-  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds" << std::endl;
-
+  std::cerr << "Actual sample rate: " << actual_samplerate << " /s" << std::endl;
+  //It is only fair to calculate repeats with actual samplerate, not our wishes.
+  if (integration_time_isSet == 1)
+    repeats = ceil((double)actual_samplerate * integration_time / N);
+  
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
-  //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
-  if (N % 256 != 0) {
-    N = (floor(N/256.0)+1)*256;
-    std::cerr << "Number of bins should be multiple of 256, changing to " << N << "." << std::endl;
+  if (N % 2 != 0) {
+    N++;
+    std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
   }
-  std::cerr << "Number of bins: " << N << std::endl;
-  std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
-
   // Due to USB specifics, buffer length for reading rtl_sdr device
   // must be a multiple of 16384. We have to keep it that way.
   // For performance reasons, the actual buffer length should be in the
   // MB range.
-  buf_length = lcm(2*N, buf_length);
+  if (buf_length % 16384 != 0)
+    buf_length = floor((double)buf_length/16384.0 + 0.5)*16384;
   int64_t readouts = ceil(2.0 * N * repeats / buf_length);
-  int batches = buf_length / (2*N);
-  std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
-
+  
+  //Print info on capture time and associated specifics.
+  std::cerr << "Number of bins: " << N << std::endl;
+  std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
+  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
+  std::cerr << "Expected time of measurements: " << N*repeats/actual_samplerate << " seconds" << std::endl;
+  std::cerr << "Data collection will proceed in " << readouts <<" readouts." << std::endl;
+  
   //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, batches, repeats, buffers);
+  Datastore data(N, buf_length, repeats, buffers);
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT
@@ -413,7 +415,10 @@ int main(int argc, char **argv)
   std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
   std::cout << "#" << std::endl;
   std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-
+  
+  //Interpolate the central point, to cancel DC bias.
+  data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+  
   for (int i = 0; i < N; i++) {
     std::cout << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;

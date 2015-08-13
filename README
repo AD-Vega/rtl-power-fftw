@@ -62,9 +62,9 @@ Where:
 
    -f <Hz>,  --freq <Hz>
      Center frequency of the receiver.
-
+     
    -b <bins in FFT spectrum>,  --bins <bins in FFT spectrum>
-     Number of bins in FFT spectrum (must be multiple of 256)
+     Number of bins in FFT spectrum (must be even number)
 
    --,  --ignore_rest
      Ignores the rest of the labeled arguments following this flag.
