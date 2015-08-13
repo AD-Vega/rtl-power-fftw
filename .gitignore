@@ -49,4 +49,6 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 
-build/
+/.kdev4/
+/rtl-power-fftw.kdev4
+/build

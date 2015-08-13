@@ -1,6 +1,7 @@
 /*
 * rtl_power_fftw, program for calculating power spectrum from rtl-sdr reciever.
 * Copyright (C) 2015 Klemen Blokar <klemen.blokar@ad-vega.si>
+*                    Andrej Lajovic <andrej.lajovic@ad-vega.si>
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -15,25 +16,24 @@
 * You should have received a copy of the GNU General Public License
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-#include <unistd.h>
-#include <stdio.h>
-#include <math.h>
-#include <fftw3.h>
-#include <stdlib.h>
-#include <time.h>
-#include <limits>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <string>
-#include <iostream>
 #include <algorithm>
-#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <deque>
-#include <tclap/CmdLine.h>
-//#include <libusb.h>
+#include <iostream>
+#include <limits>
+#include <mutex>
+#include <string>
+#include <thread>
+
+#include <fftw3.h>
 #include <rtl-sdr.h>
-//#include <rtl-sdr/convenience/convenience.h>
+#include <tclap/CmdLine.h>
 
 // Indices of real and imaginary parts of complex numbers; for convenience.
 #define RE 0
@@ -43,15 +43,11 @@
 
 static rtlsdr_dev_t *dev = NULL;
 
-// Get current date/time, format is YYYY-MM-DD.HH:mm:ss
+// Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 const std::string currentDateTime() {
-  time_t     now = time(0);
-  struct tm  tstruct;
-  char       buf[80];
-  tstruct = *localtime(&now);
-  // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
-  // for more information about date/time format
-  strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+  time_t now = time(0);
+  char buf[80];
+  strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", gmtime(&now));
   return buf;
 }
 
@@ -73,9 +69,9 @@ class Datastore {
   public:
     int N;
     int batches;
-    int repeats;
-    int repeats_done = 0;
     int BUFFERS;
+    int64_t repeats;
+    int64_t repeats_done = 0;
 
     std::mutex status_mutex;
     // Access to the following objects must be protected by locking
@@ -90,7 +86,7 @@ class Datastore {
     fftw_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int batches, int repeats, int BUFFERS);
+    Datastore(int N, int buf_length, int batches, int64_t repeats, int BUFFERS);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -101,8 +97,8 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length, int batches_, int repeats_, int BUFFERS_) :
-  N(N_), batches(batches_), repeats(repeats_), BUFFERS(BUFFERS_),
+Datastore::Datastore(int N_, int buf_length, int batches_, int64_t repeats_, int BUFFERS_) :
+  N(N_), batches(batches_), BUFFERS(BUFFERS_), repeats(repeats_), 
   queue_histogram(BUFFERS_+1, 0), pwr(N)
 {
   for (int i = 0; i < BUFFERS; i++)
@@ -139,7 +135,7 @@ int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
 }
 
 void print_gain_table(const std::vector<int>& gain_table) {
-  std::cerr << "Available gains: ";
+  std::cerr << "Available gains (in 1/10th of dB): ";
   for (unsigned int i = 0; i < gain_table.size(); i++) {
     if (i != 0)
       std::cerr << ", ";
@@ -209,10 +205,29 @@ void fft(Datastore& data) {
   }
 }
 
+class NegativeArgException {
+public:
+  NegativeArgException(std::string msg_) : msg(msg_) {}
+  std::string what() const { return msg; }
+private:
+  std::string msg;
+};
+
+template <typename T>
+void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
+  for (auto arg : list) {
+    if (arg->isSet() && arg->getValue() < 0) {
+      std::ostringstream message;
+      message << "Argument to '" << arg->getName() << "' must be a positive number.";
+      throw NegativeArgException(message.str());
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
   int N = 512;
-  int repeats = 1;
+  int64_t repeats = 1;
   int dev_index = 0;
   int gain = 372;
   int cfreq = 89300000;
@@ -221,23 +236,22 @@ int main(int argc, char **argv)
   int rtl_retval;
   int BUFFERS = 5;
   int buf_length = 16384*100;
-  std::string begining, end;
 
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be multiple of 256)",false,512,"bins in FFT spectrum");
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be multiple of 256)",false,N,"bins in FFT spectrum");
     cmd.add( arg_bins );
-    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,89300000,"Hz");
+    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,cfreq,"Hz");
     cmd.add( arg_freq );
-    TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,2000000,"samples/s");
+    TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
     cmd.add( arg_rate );
-    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, 372, "1/10th of dB");
+    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
-    TCLAP::ValueArg<int> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,1,"repeats");
+    TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
-    TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,0,"seconds");
+    TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
-    TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,0,"device index");
+    TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
     TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,5,"buffers");
     cmd.add( arg_buffers );
@@ -246,8 +260,22 @@ int main(int argc, char **argv)
 
     cmd.parse(argc, argv);
 
+    try {
+      // Ain't this C++11 f**** magic? Watch this:
+      ensure_positive_arg<int>({&arg_bins, &arg_freq, &arg_rate, &arg_gain, &arg_integration_time, &arg_index});
+      ensure_positive_arg<int64_t>({&arg_repeats});
+    }
+    catch (NegativeArgException& e) {
+      std::cerr << e.what() << std::endl;
+      return 3;
+    }
+
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
+    gain = arg_gain.getValue();
+    cfreq = arg_freq.getValue();
+    sample_rate = arg_rate.getValue();
+
     if (arg_repeats.isSet())
         repeats = arg_repeats.getValue();
     if (arg_integration_time.isSet())
@@ -258,7 +286,7 @@ int main(int argc, char **argv)
       return 3;
     }
     else if (arg_integration_time.isSet()) {
-      repeats = (int)( (sample_rate * integration_time) / (double)N + 0.5 );
+      repeats = ceil((double)sample_rate * integration_time / N);
     }
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
@@ -296,28 +324,29 @@ int main(int argc, char **argv)
   rtlsdr_get_tuner_gains(dev, gain_table.data());
   print_gain_table(gain_table);
   gain = select_nearest_gain(gain, gain_table);
-  std::cerr << "Selected nearest available gain: " << gain << std::endl;
+  std::cerr << "Selected nearest available gain: " << gain
+            << " (" << 0.1*gain << " dB)" << std::endl;
   rtlsdr_set_tuner_gain_mode(dev, 1);
   rtlsdr_set_tuner_gain(dev, gain);
 
   //Center frequency
   rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   int tuned_freq = rtlsdr_get_center_freq(dev);
-  std::cerr << "Device tuned to: " << tuned_freq << " Hz." << std::endl;
-  usleep(5000);
+  std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
+  std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
 
   //Print info on capture time
-  std::cerr << "Number of averaged spectra: " << repeats << "." << std::endl;
-  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds." << std::endl;
+  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
+  std::cerr << "Expected time of measurements: " << N*repeats/sample_rate << " seconds" << std::endl;
 
   //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
   //rtl_sdr seems to be only able to read data from USB dongle in chunks of 256 (complex) data points.
   if (N % 256 != 0) {
-    N = ((floor(N/256.0))+1)*256;
+    N = (floor(N/256.0)+1)*256;
     std::cerr << "Number of bins should be multiple of 256, changing to " << N << "." << std::endl;
   }
   std::cerr << "Number of bins: " << N << std::endl;
@@ -328,7 +357,7 @@ int main(int argc, char **argv)
   // For performance reasons, the actual buffer length should be in the
   // MB range.
   buf_length = lcm(2*N, buf_length);
-  int readouts = ceil(2.0 * N * repeats / buf_length);
+  int64_t readouts = ceil(2.0 * N * repeats / buf_length);
   int batches = buf_length / (2*N);
   std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
 
@@ -339,10 +368,13 @@ int main(int argc, char **argv)
   //Read from device and do FFT
   std::thread t(&fft, std::ref(data));
 
+  // Record the start-of-acquisition timestamp.
+  std::string startAcqTimestamp = currentDateTime();
+  std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+
   std::unique_lock<std::mutex>
     status_lock(data.status_mutex, std::defer_lock);
-  int count = 0;
-  begining = currentDateTime();
+  int64_t count = 0;
   while (count <= readouts) {
     // Wait until a buffer is empty
     status_lock.lock();
@@ -372,8 +404,9 @@ int main(int argc, char **argv)
       status_lock.unlock();
     }
   }
-  end = currentDateTime();
-  std::cerr << "Acquisition_done at " << end << std::endl;
+  // Record the start-of-acquisition timestamp.
+  std::string endAcqTimestamp = currentDateTime();
+  std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
   status_lock.lock();
   data.acquisition_finished = true;
@@ -383,17 +416,21 @@ int main(int argc, char **argv)
 
   //Write out.
   std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << begining << std::endl;
-  std::cout << "# Acquisition end: " << end << std::endl;
+  std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
+  std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
+  std::cout << "#" << std::endl;
   std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+
   for (int i = 0; i < N; i++) {
     std::cout << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
-  std::cerr << "Acquisition buffer histogram: ";
+
+  std::cerr << "Buffer queue histogram: ";
   for (auto size : data.queue_histogram)
     std::cerr << size << " ";
   std::cerr << std::endl;
+
   rtlsdr_close(dev);
   return 0;
 }
