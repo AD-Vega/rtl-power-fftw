@@ -331,7 +331,7 @@ int main(int argc, char **argv)
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
-  std::cerr << "Actual sample rate: " << actual_samplerate << " /s" << std::endl;
+  std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
   if (integration_time_isSet == 1)
     repeats = ceil((double)actual_samplerate * integration_time / N);
@@ -420,7 +420,7 @@ int main(int argc, char **argv)
   data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
   
   for (int i = 0; i < N; i++) {
-    std::cout << tuned_freq + (i-N/2.0) * ( (N-1) / (double)N  * (double)actual_samplerate / (double)N ) << " "
+    std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N - 1) ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
 
