@@ -176,21 +176,15 @@ void fft(Datastore& data) {
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-        if (fft_pointer % 2 == 0) {
-          data.inbuf[fft_pointer][RE] = (double) buffer[buffer_pointer] - 127;
-          data.inbuf[fft_pointer][IM] = (double) buffer[buffer_pointer + 1] - 127;
-        }
-        else {
-          data.inbuf[fft_pointer][RE] = ((double) buffer[buffer_pointer] - 127) * -1;
-          data.inbuf[fft_pointer][IM] = ((double) buffer[buffer_pointer + 1] - 127) * -1;
-        }
-        buffer_pointer += 2;
+        const double multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
+        data.inbuf[fft_pointer][RE] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
+        data.inbuf[fft_pointer][IM] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
         fft_pointer++;
       }
       if (fft_pointer == data.N) {
         fftw_execute(data.plan);
         for (int i = 0; i < data.N; i++) {
-          data.pwr[i] += data.outbuf[i][RE] * data.outbuf[i][RE] + data.outbuf[i][IM] * data.outbuf[i][IM];
+          data.pwr[i] += pow(data.outbuf[i][RE], 2) + pow(data.outbuf[i][IM], 2);
         }
         data.repeats_done++;
         fft_pointer = 0;
