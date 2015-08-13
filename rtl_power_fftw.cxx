@@ -39,8 +39,6 @@
 #define RE 0
 #define IM 1
 
-//#define BUFFERS 5
-
 static rtlsdr_dev_t *dev = NULL;
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
@@ -69,7 +67,7 @@ class Datastore {
   public:
     int N;
     int batches;
-    int BUFFERS;
+    int buffers;
     int64_t repeats;
     int64_t repeats_done = 0;
 
@@ -86,7 +84,7 @@ class Datastore {
     fftw_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int batches, int64_t repeats, int BUFFERS);
+    Datastore(int N, int buf_length, int batches, int64_t repeats, int buffers);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -97,11 +95,11 @@ class Datastore {
     Datastore& operator=(Datastore&&) = delete;
 };
 
-Datastore::Datastore(int N_, int buf_length, int batches_, int64_t repeats_, int BUFFERS_) :
-  N(N_), batches(batches_), BUFFERS(BUFFERS_), repeats(repeats_), 
-  queue_histogram(BUFFERS_+1, 0), pwr(N)
+Datastore::Datastore(int N_, int buf_length, int batches_, int64_t repeats_, int buffers_) :
+  N(N_), batches(batches_), buffers(buffers_), repeats(repeats_), 
+  queue_histogram(buffers_+1, 0), pwr(N)
 {
-  for (int i = 0; i < BUFFERS; i++)
+  for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
 
   inbuf = fftw_alloc_complex(N);
@@ -234,7 +232,7 @@ int main(int argc, char **argv)
   int sample_rate = 2000000;
   int integration_time = 0;
   int rtl_retval;
-  int BUFFERS = 5;
+  int buffers = 5;
   int buf_length = 16384*100;
 
   try {
@@ -253,7 +251,7 @@ int main(int argc, char **argv)
     cmd.add( arg_integration_time );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
-    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,BUFFERS,"buffers");
+    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
     cmd.add( arg_buffers );
     TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
     cmd.add( arg_bufferlen );
@@ -275,7 +273,9 @@ int main(int argc, char **argv)
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
     sample_rate = arg_rate.getValue();
-
+    buffers = arg_buffers.getValue();
+    buf_length = arg_bufferlen.getValue();
+    
     if (arg_repeats.isSet())
         repeats = arg_repeats.getValue();
     if (arg_integration_time.isSet())
@@ -288,11 +288,6 @@ int main(int argc, char **argv)
     else if (arg_integration_time.isSet()) {
       repeats = ceil((double)sample_rate * integration_time / N);
     }
-    gain = arg_gain.getValue();
-    cfreq = arg_freq.getValue();
-    sample_rate = arg_rate.getValue();
-    BUFFERS = arg_buffers.getValue();
-    buf_length = arg_bufferlen.getValue();
   }
   catch (TCLAP::ArgException &e) { 
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
@@ -360,7 +355,7 @@ int main(int argc, char **argv)
   std::cerr << "Data collection will proceed in " << readouts <<" readouts, each consisting of " << batches << " batches." << std::endl;
 
   //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, batches, repeats, BUFFERS);
+  Datastore data(N, buf_length, batches, repeats, buffers);
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT
