@@ -253,16 +253,16 @@ int main(int argc, char **argv)
     cmd.add( arg_integration_time );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
-    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,5,"buffers");
+    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,BUFFERS,"buffers");
     cmd.add( arg_buffers );
-    TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, 1638400, "bytes");
+    TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
     cmd.add( arg_bufferlen );
 
     cmd.parse(argc, argv);
 
     try {
       // Ain't this C++11 f**** magic? Watch this:
-      ensure_positive_arg<int>({&arg_bins, &arg_freq, &arg_rate, &arg_gain, &arg_integration_time, &arg_index});
+      ensure_positive_arg<int>({&arg_bins, &arg_freq, &arg_rate, &arg_gain, &arg_integration_time, &arg_index, &arg_buffers, &arg_bufferlen});
       ensure_positive_arg<int64_t>({&arg_repeats});
     }
     catch (NegativeArgException& e) {
