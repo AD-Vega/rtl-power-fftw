@@ -269,17 +269,33 @@ int main(int argc, char **argv)
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
+    //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
+    if (N % 2 != 0) {
+      N++;
+      std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
+    }
     gain = arg_gain.getValue();
     cfreq = arg_freq.getValue();
     sample_rate = arg_rate.getValue();
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
+    // Due to USB specifics, buffer length for reading rtl_sdr device
+    // must be a multiple of 16384. We have to keep it that way.
+    // For performance reasons, the actual buffer length should be in the
+    // MB range.
+    if (buf_length % 16384 != 0) {
+      buf_length = floor((double)buf_length/16384.0 + 0.5)*16384;
+      std::cerr << "Buffer length should be multiple of 16384, changing to " << buf_length << "." << std::endl;
+    }
     ppm_error = arg_ppm.getValue();
     if (arg_repeats.isSet())
       repeats = arg_repeats.getValue();
-    if (arg_integration_time.isSet())
+    else
+      repeats = buf_length/N;
+    if (arg_integration_time.isSet()) {
       integration_time = arg_integration_time.getValue();
       integration_time_isSet = 1;
+    }
     //Integration time
     if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
       std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
@@ -342,25 +358,14 @@ int main(int argc, char **argv)
   if (integration_time_isSet == 1)
     repeats = ceil((double)actual_samplerate * integration_time / N);
   
-  //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
-  if (N % 2 != 0) {
-    N++;
-    std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
-  }
-  // Due to USB specifics, buffer length for reading rtl_sdr device
-  // must be a multiple of 16384. We have to keep it that way.
-  // For performance reasons, the actual buffer length should be in the
-  // MB range.
-  if (buf_length % 16384 != 0)
-    buf_length = floor((double)buf_length/16384.0 + 0.5)*16384;
-  int64_t readouts = ceil(2.0 * N * repeats / buf_length);
+  int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
   
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
-  std::cerr << "Total number of (complex) samples to collect: " << N*repeats << std::endl;
+  std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
-  std::cerr << "Expected time of measurements: " << N*repeats/actual_samplerate << " seconds" << std::endl;
-  std::cerr << "Data collection will proceed in " << readouts <<" readouts." << std::endl;
+  std::cerr << "Number of device readouts: " << readouts << std::endl;
+  std::cerr << "Expected time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
   
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, buffers);
