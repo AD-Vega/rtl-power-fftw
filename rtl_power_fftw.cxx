@@ -419,7 +419,7 @@ int main(int argc, char **argv)
   data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
   
   for (int i = 0; i < N; i++) {
-    std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N - 1) ) << " "
+    std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
               << 10*log10(data.pwr[i]/ repeats) << std::endl;
   }
 
