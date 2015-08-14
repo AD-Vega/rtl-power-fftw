@@ -229,6 +229,7 @@ int main(int argc, char **argv)
   int rtl_retval;
   int buffers = 5;
   int buf_length = 16384*100;
+  int ppm_error = 0;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/N;
   try {
@@ -251,6 +252,8 @@ int main(int argc, char **argv)
     cmd.add( arg_buffers );
     TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
     cmd.add( arg_bufferlen );
+    TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
+    cmd.add( arg_ppm );
 
     cmd.parse(argc, argv);
 
@@ -271,7 +274,7 @@ int main(int argc, char **argv)
     sample_rate = arg_rate.getValue();
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
-    
+    ppm_error = arg_ppm.getValue();
     if (arg_repeats.isSet())
       repeats = arg_repeats.getValue();
     if (arg_integration_time.isSet())
@@ -321,6 +324,15 @@ int main(int argc, char **argv)
   int tuned_freq = rtlsdr_get_center_freq(dev);
   std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  
+  //Frequency correction
+  if (ppm_error != 0) {
+    rtl_retval = rtlsdr_set_freq_correction(dev, ppm_error);
+    if (rtl_retval < 0)
+      std::cerr << "Unable to set PPM error in rtl_sdr device." << std::endl;
+    else
+      std::cerr << "PPM error set to: "<< ppm_error << std::endl;
+  }
 
   //Sample rate
   rtlsdr_set_sample_rate(dev, (uint32_t)sample_rate);

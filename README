@@ -39,6 +39,9 @@ USAGE:
 
 Where: 
 
+   -p <ppm>,  --ppm <ppm>
+     Set custom ppm error in RTL-SDR device.
+
    -s <bytes>,  --buffer-size <bytes>
      Size of read buffers (leave it unless you know what you are doing).
 
