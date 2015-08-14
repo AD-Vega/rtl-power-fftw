@@ -49,18 +49,6 @@ const std::string currentDateTime() {
   return buf;
 }
 
-// Greatest common denominator
-int gcd(int a, int b) {
-  if (b == 0)
-    return a;
-  return gcd(b, a % b);
-}
-
-// Lowest common multiplier
-int lcm(int a, int b){
-  return a*b / gcd(a, b);
-}
-
 using Buffer = std::vector<uint8_t>;
 
 class Datastore {
