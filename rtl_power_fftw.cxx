@@ -30,19 +30,16 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <complex>
 
 #include <fftw3.h>
 #include <rtl-sdr.h>
 #include <tclap/CmdLine.h>
 
-// Indices of real and imaginary parts of complex numbers; for convenience.
-#define RE 0
-#define IM 1
-
-static rtlsdr_dev_t *dev = NULL;
+static rtlsdr_dev_t *dev = nullptr;
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
-const std::string currentDateTime() {
+std::string currentDateTime() {
   time_t now = time(0);
   char buf[80];
   strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", gmtime(&now));
@@ -50,6 +47,7 @@ const std::string currentDateTime() {
 }
 
 using Buffer = std::vector<uint8_t>;
+using complex = std::complex<double>;
 
 class Datastore {
   public:
@@ -60,14 +58,14 @@ class Datastore {
 
     std::mutex status_mutex;
     // Access to the following objects must be protected by locking
-    // buffer_mutex.
+    // status_mutex.
     std::deque<Buffer*> empty_buffers;
     std::deque<Buffer*> occupied_buffers;
     bool acquisition_finished = false;
     std::condition_variable status_change;
     std::vector<int> queue_histogram;
 
-    fftw_complex *inbuf, *outbuf;
+    complex *inbuf, *outbuf;
     fftw_plan plan;
     std::vector<double> pwr;
 
@@ -89,9 +87,10 @@ Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
   for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
 
-  inbuf = fftw_alloc_complex(N);
-  outbuf = fftw_alloc_complex(N);
-  plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
+  inbuf = (complex*)fftw_alloc_complex(N);
+  outbuf = (complex*)fftw_alloc_complex(N);
+  plan = fftw_plan_dft_1d(N, (fftw_complex*)inbuf, (fftw_complex*)outbuf,
+			  FFTW_FORWARD, FFTW_MEASURE);
 }
 
 Datastore::~Datastore() {
@@ -165,14 +164,15 @@ void fft(Datastore& data) {
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
         const double multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
-        data.inbuf[fft_pointer][RE] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
-        data.inbuf[fft_pointer][IM] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
+	complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
+	data.inbuf[fft_pointer] = (bfr_val - 127.0) * multiplier;
+	buffer_pointer += 2;
         fft_pointer++;
       }
       if (fft_pointer == data.N) {
         fftw_execute(data.plan);
         for (int i = 0; i < data.N; i++) {
-          data.pwr[i] += pow(data.outbuf[i][RE], 2) + pow(data.outbuf[i][IM], 2);
+	  data.pwr[i] += std::norm(data.outbuf[i]);
         }
         data.repeats_done++;
         fft_pointer = 0;
@@ -294,8 +294,8 @@ int main(int argc, char **argv)
       return 3;
     }
   }
-  catch (TCLAP::ArgException &e) { 
-    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
+  catch (TCLAP::ArgException &e) {
+    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
     return 4;
   }
 
@@ -317,7 +317,7 @@ int main(int argc, char **argv)
   }
 
   //Available gains
-  int number_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
+  int number_of_gains = rtlsdr_get_tuner_gains(dev, nullptr);
   std::vector<int> gain_table(number_of_gains);
   rtlsdr_get_tuner_gains(dev, gain_table.data());
   print_gain_table(gain_table);
@@ -332,7 +332,7 @@ int main(int argc, char **argv)
   int tuned_freq = rtlsdr_get_center_freq(dev);
   std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  
+
   //Frequency correction
   if (ppm_error != 0) {
     rtl_retval = rtlsdr_set_freq_correction(dev, ppm_error);
@@ -349,16 +349,16 @@ int main(int argc, char **argv)
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
   if (integration_time_isSet == 1)
     repeats = ceil((double)actual_samplerate * integration_time / N);
-  
+
   int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
-  
+
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Number of device readouts: " << readouts << std::endl;
   std::cerr << "Expected time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
-  
+
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, buffers);
 
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
     std::fill(data.pwr.begin(), data.pwr.end(), 0);
     data.acquisition_finished = false;
     data.repeats_done = 0;
-    
+
     std::thread t(&fft, std::ref(data));
 
     // Record the start-of-acquisition timestamp.
@@ -406,7 +406,7 @@ int main(int argc, char **argv)
         status_lock.unlock();
       }
     }
-    // Record the start-of-acquisition timestamp.
+    // Record the end-of-acquisition timestamp.
     std::string endAcqTimestamp = currentDateTime();
     std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
@@ -422,10 +422,10 @@ int main(int argc, char **argv)
     std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
     std::cout << "#" << std::endl;
     std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-    
+
     //Interpolate the central point, to cancel DC bias.
     data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-    
+
     for (int i = 0; i < N; i++) {
       std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
                 << 10*log10(data.pwr[i]/ repeats) << std::endl;
