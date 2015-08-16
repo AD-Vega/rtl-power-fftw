@@ -364,7 +364,7 @@ int main(int argc, char **argv)
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT
-  while (true) {
+  do {
     data.acquisition_finished = false;
     data.repeats_done = 0;
     
@@ -430,14 +430,17 @@ int main(int argc, char **argv)
       std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
                 << 10*log10(data.pwr[i]/ repeats) << std::endl;
     }
+    if (endless) {
+      // Separate measurement sets with empty lines.
+      std::cout << std::endl;
+    }
+    std::cout.flush();
 
     std::cerr << "Buffer queue histogram: ";
     for (auto size : data.queue_histogram)
       std::cerr << size << " ";
     std::cerr << std::endl;
-    if (!endless)
-      break;
-  }
+  } while (endless);
 
   rtlsdr_close(dev);
   return 0;
