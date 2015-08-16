@@ -39,7 +39,7 @@
 #define RE 0
 #define IM 1
 
-static rtlsdr_dev_t *dev = NULL;
+static rtlsdr_dev_t *dev = nullptr;
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 const std::string currentDateTime() {
@@ -294,8 +294,8 @@ int main(int argc, char **argv)
       return 3;
     }
   }
-  catch (TCLAP::ArgException &e) { 
-    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl; 
+  catch (TCLAP::ArgException &e) {
+    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
     return 4;
   }
 
@@ -317,7 +317,7 @@ int main(int argc, char **argv)
   }
 
   //Available gains
-  int number_of_gains = rtlsdr_get_tuner_gains(dev, NULL);
+  int number_of_gains = rtlsdr_get_tuner_gains(dev, nullptr);
   std::vector<int> gain_table(number_of_gains);
   rtlsdr_get_tuner_gains(dev, gain_table.data());
   print_gain_table(gain_table);
@@ -332,7 +332,7 @@ int main(int argc, char **argv)
   int tuned_freq = rtlsdr_get_center_freq(dev);
   std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  
+
   //Frequency correction
   if (ppm_error != 0) {
     rtl_retval = rtlsdr_set_freq_correction(dev, ppm_error);
@@ -349,16 +349,16 @@ int main(int argc, char **argv)
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
   if (integration_time_isSet == 1)
     repeats = ceil((double)actual_samplerate * integration_time / N);
-  
+
   int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
-  
+
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Number of device readouts: " << readouts << std::endl;
   std::cerr << "Expected time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
-  
+
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, buffers);
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
@@ -367,7 +367,7 @@ int main(int argc, char **argv)
   while (true) {
     data.acquisition_finished = false;
     data.repeats_done = 0;
-    
+
     std::thread t(&fft, std::ref(data));
 
     // Record the start-of-acquisition timestamp.
@@ -422,10 +422,10 @@ int main(int argc, char **argv)
     std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
     std::cout << "#" << std::endl;
     std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-    
+
     //Interpolate the central point, to cancel DC bias.
     data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-    
+
     for (int i = 0; i < N; i++) {
       std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
                 << 10*log10(data.pwr[i]/ repeats) << std::endl;
