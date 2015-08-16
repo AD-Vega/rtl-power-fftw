@@ -32,42 +32,45 @@ This is the current state of what the program supports:
 
 USAGE: 
 
-   ./rtl_power_fftw  [-s <bytes>] [-B <buffers>] [-d <device index>] [-t
-                     <seconds>] [-n <repeats>] [-g <1/10th of dB>] [-r
-                     <samples/s>] [-f <Hz>] [-b <bins in FFT spectrum>]
-                     [--] [--version] [-h]
+   ./rtl_power_fftw  [-B <buffers>] [-b <bins in FFT spectrum>] [-c] [-d
+                     <device index>] [-f <Hz>] [-g <1/10th of dB>] [-n
+                     <repeats>] [-p <ppm>] [-r <samples/s>] [-s <bytes>]
+                     [-t <seconds>] [--] [--version] [-h]
 
 Where: 
-
-   -p <ppm>,  --ppm <ppm>
-     Set custom ppm error in RTL-SDR device.
-
-   -s <bytes>,  --buffer-size <bytes>
-     Size of read buffers (leave it unless you know what you are doing).
 
    -B <buffers>,  --buffers <buffers>
      Number of read buffers (don't touch unless running out of memory).
 
+   -b <bins in FFT spectrum>,  --bins <bins in FFT spectrum>
+     Number of bins in FFT spectrum (must be even number)
+
+   -c,  --continue
+     Repeat the same measurement endlessly.
+
    -d <device index>,  --device <device index>
      RTL-SDR device index.
 
-   -t <seconds>,  --time <seconds>
-     Integration time in seconds (incompatible with -n).
-
-   -n <repeats>,  --repeats <repeats>
-     Number of scans for averaging (incompatible with -t).
+   -f <Hz>,  --freq <Hz>
+     Center frequency of the receiver.
 
    -g <1/10th of dB>,  --gain <1/10th of dB>
      Receiver gain.
 
+   -n <repeats>,  --repeats <repeats>
+     Number of scans for averaging (incompatible with -t).
+
+   -p <ppm>,  --ppm <ppm>
+     Set custom ppm error in RTL-SDR device.
+
    -r <samples/s>,  --rate <samples/s>
      Sample rate of the receiver.
 
-   -f <Hz>,  --freq <Hz>
-     Center frequency of the receiver.
-     
-   -b <bins in FFT spectrum>,  --bins <bins in FFT spectrum>
-     Number of bins in FFT spectrum (must be even number)
+   -s <bytes>,  --buffer-size <bytes>
+     Size of read buffers (leave it unless you know what you are doing).
+
+   -t <seconds>,  --time <seconds>
+     Integration time in seconds (incompatible with -n).
 
    --,  --ignore_rest
      Ignores the rest of the labeled arguments following this flag.
@@ -77,6 +80,7 @@ Where:
 
    -h,  --help
      Displays usage information and exits.
+
 
 Example use of rtl_power_fftw with gnuplot to draw spectrum in a png file:
 ./rtl_power_fftw -f 1420000000 -n 100 -b 512 |\

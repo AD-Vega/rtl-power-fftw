@@ -218,30 +218,33 @@ int main(int argc, char **argv)
   int buffers = 5;
   int buf_length = 16384*100;
   int ppm_error = 0;
+  bool endless = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/N;
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
-    cmd.add( arg_bins );
-    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,cfreq,"Hz");
-    cmd.add( arg_freq );
-    TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
-    cmd.add( arg_rate );
-    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
-    cmd.add( arg_gain );
-    TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
-    cmd.add( arg_repeats );
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
-    TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
-    cmd.add( arg_index );
-    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
-    cmd.add( arg_buffers );
     TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
     cmd.add( arg_bufferlen );
+    TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
+    cmd.add( arg_rate );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
+    TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
+    cmd.add( arg_repeats );
+    TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
+    cmd.add( arg_gain );
+    TCLAP::ValueArg<int> arg_freq("f","freq","Center frequency of the receiver.",false,cfreq,"Hz");
+    cmd.add( arg_freq );
+    TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
+    cmd.add( arg_index );
+    TCLAP::SwitchArg arg_continue("c","continue","Repeat the same measurement endlessly.", endless);
+    cmd.add( arg_continue );
+    TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
+    cmd.add( arg_bins );
+    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
+    cmd.add( arg_buffers );
 
     cmd.parse(argc, argv);
 
@@ -267,6 +270,7 @@ int main(int argc, char **argv)
     sample_rate = arg_rate.getValue();
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
+    endless = arg_continue.getValue();
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
     // For performance reasons, the actual buffer length should be in the
@@ -360,73 +364,80 @@ int main(int argc, char **argv)
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT
-  std::thread t(&fft, std::ref(data));
+  while (true) {
+    data.acquisition_finished = false;
+    data.repeats_done = 0;
+    
+    std::thread t(&fft, std::ref(data));
 
-  // Record the start-of-acquisition timestamp.
-  std::string startAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+    // Record the start-of-acquisition timestamp.
+    std::string startAcqTimestamp = currentDateTime();
+    std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
 
-  std::unique_lock<std::mutex>
-    status_lock(data.status_mutex, std::defer_lock);
-  int64_t count = 0;
-  while (count <= readouts) {
-    // Wait until a buffer is empty
+    std::unique_lock<std::mutex>
+      status_lock(data.status_mutex, std::defer_lock);
+    int64_t count = 0;
+    while (count <= readouts) {
+      // Wait until a buffer is empty
+      status_lock.lock();
+      data.queue_histogram[data.empty_buffers.size()]++;
+      while (data.empty_buffers.empty())
+        data.status_change.wait(status_lock);
+
+      Buffer& buffer(*data.empty_buffers.front());
+      data.empty_buffers.pop_front();
+      status_lock.unlock();
+
+      rtl_retval = read_rtlsdr(buffer);
+
+      if (rtl_retval) {
+        fprintf(stderr, "Error: dropped samples.\n");
+        // There is effectively no data in this buffer - consider it empty.
+        status_lock.lock();
+        data.empty_buffers.push_back(&buffer);
+        status_lock.unlock();
+        // No need to notify the worker thread in this case.
+      }
+      else {
+        count++;
+        status_lock.lock();
+        data.occupied_buffers.push_back(&buffer);
+        data.status_change.notify_all();
+        status_lock.unlock();
+      }
+    }
+    // Record the start-of-acquisition timestamp.
+    std::string endAcqTimestamp = currentDateTime();
+    std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
+
     status_lock.lock();
-    data.queue_histogram[data.empty_buffers.size()]++;
-    while (data.empty_buffers.empty())
-      data.status_change.wait(status_lock);
-
-    Buffer& buffer(*data.empty_buffers.front());
-    data.empty_buffers.pop_front();
+    data.acquisition_finished = true;
+    data.status_change.notify_all();
     status_lock.unlock();
+    t.join();
 
-    rtl_retval = read_rtlsdr(buffer);
-
-    if (rtl_retval) {
-      fprintf(stderr, "Error: dropped samples.\n");
-      // There is effectively no data in this buffer - consider it empty.
-      status_lock.lock();
-      data.empty_buffers.push_back(&buffer);
-      status_lock.unlock();
-      // No need to notify the worker thread in this case.
+    //Write out.
+    std::cout << "# rtl-power-fftw output" << std::endl;
+    std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
+    std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
+    std::cout << "#" << std::endl;
+    std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+    
+    //Interpolate the central point, to cancel DC bias.
+    data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+    
+    for (int i = 0; i < N; i++) {
+      std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
+                << 10*log10(data.pwr[i]/ repeats) << std::endl;
     }
-    else {
-      count++;
-      status_lock.lock();
-      data.occupied_buffers.push_back(&buffer);
-      data.status_change.notify_all();
-      status_lock.unlock();
-    }
+
+    std::cerr << "Buffer queue histogram: ";
+    for (auto size : data.queue_histogram)
+      std::cerr << size << " ";
+    std::cerr << std::endl;
+    if (!endless)
+      break;
   }
-  // Record the start-of-acquisition timestamp.
-  std::string endAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
-
-  status_lock.lock();
-  data.acquisition_finished = true;
-  data.status_change.notify_all();
-  status_lock.unlock();
-  t.join();
-
-  //Write out.
-  std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
-  std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
-  std::cout << "#" << std::endl;
-  std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-  
-  //Interpolate the central point, to cancel DC bias.
-  data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-  
-  for (int i = 0; i < N; i++) {
-    std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
-              << 10*log10(data.pwr[i]/ repeats) << std::endl;
-  }
-
-  std::cerr << "Buffer queue histogram: ";
-  for (auto size : data.queue_histogram)
-    std::cerr << size << " ";
-  std::cerr << std::endl;
 
   rtlsdr_close(dev);
   return 0;
