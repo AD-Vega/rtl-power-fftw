@@ -220,7 +220,7 @@ int main(int argc, char **argv)
   int ppm_error = 0;
   bool endless = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
-  int64_t repeats = buf_length/N;
+  int64_t repeats = buf_length/(2*N);
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
@@ -283,7 +283,7 @@ int main(int argc, char **argv)
     if (arg_repeats.isSet())
       repeats = arg_repeats.getValue();
     else
-      repeats = buf_length/N;
+      repeats = buf_length/(2*N);
     if (arg_integration_time.isSet()) {
       integration_time = arg_integration_time.getValue();
       integration_time_isSet = 1;
