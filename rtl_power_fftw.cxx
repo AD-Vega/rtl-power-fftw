@@ -60,7 +60,7 @@ class Datastore {
 
     std::mutex status_mutex;
     // Access to the following objects must be protected by locking
-    // buffer_mutex.
+    // status_mutex.
     std::deque<Buffer*> empty_buffers;
     std::deque<Buffer*> occupied_buffers;
     bool acquisition_finished = false;
@@ -406,7 +406,7 @@ int main(int argc, char **argv)
         status_lock.unlock();
       }
     }
-    // Record the start-of-acquisition timestamp.
+    // Record the end-of-acquisition timestamp.
     std::string endAcqTimestamp = currentDateTime();
     std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
