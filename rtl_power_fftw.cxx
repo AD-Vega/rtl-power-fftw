@@ -361,10 +361,10 @@ int main(int argc, char **argv)
   
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, buffers);
-  std::fill(data.pwr.begin(), data.pwr.end(), 0);
 
   //Read from device and do FFT
   do {
+    std::fill(data.pwr.begin(), data.pwr.end(), 0);
     data.acquisition_finished = false;
     data.repeats_done = 0;
     
