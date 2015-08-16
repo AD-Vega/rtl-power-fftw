@@ -165,7 +165,7 @@ void fft(Datastore& data) {
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
         const double multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
 	complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
-	data.inbuf[fft_pointer] = (bfr_val - 127.0) * multiplier;
+	data.inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
 	buffer_pointer += 2;
         fft_pointer++;
       }
