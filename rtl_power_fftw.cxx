@@ -39,7 +39,7 @@
 static rtlsdr_dev_t *dev = nullptr;
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
-const std::string currentDateTime() {
+std::string currentDateTime() {
   time_t now = time(0);
   char buf[80];
   strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", gmtime(&now));
