@@ -30,14 +30,11 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <complex>
 
 #include <fftw3.h>
 #include <rtl-sdr.h>
 #include <tclap/CmdLine.h>
-
-// Indices of real and imaginary parts of complex numbers; for convenience.
-#define RE 0
-#define IM 1
 
 static rtlsdr_dev_t *dev = nullptr;
 
@@ -50,6 +47,7 @@ const std::string currentDateTime() {
 }
 
 using Buffer = std::vector<uint8_t>;
+using complex = std::complex<double>;
 
 class Datastore {
   public:
@@ -67,7 +65,7 @@ class Datastore {
     std::condition_variable status_change;
     std::vector<int> queue_histogram;
 
-    fftw_complex *inbuf, *outbuf;
+    complex *inbuf, *outbuf;
     fftw_plan plan;
     std::vector<double> pwr;
 
@@ -89,9 +87,10 @@ Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
   for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
 
-  inbuf = fftw_alloc_complex(N);
-  outbuf = fftw_alloc_complex(N);
-  plan = fftw_plan_dft_1d(N, inbuf, outbuf, FFTW_FORWARD, FFTW_MEASURE);
+  inbuf = (complex*)fftw_alloc_complex(N);
+  outbuf = (complex*)fftw_alloc_complex(N);
+  plan = fftw_plan_dft_1d(N, (fftw_complex*)inbuf, (fftw_complex*)outbuf,
+			  FFTW_FORWARD, FFTW_MEASURE);
 }
 
 Datastore::~Datastore() {
@@ -165,14 +164,15 @@ void fft(Datastore& data) {
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
         const double multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
-        data.inbuf[fft_pointer][RE] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
-        data.inbuf[fft_pointer][IM] = ((double) buffer[buffer_pointer++] - 127) * multiplier;
+	complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
+	data.inbuf[fft_pointer] = (bfr_val - 127.0) * multiplier;
+	buffer_pointer += 2;
         fft_pointer++;
       }
       if (fft_pointer == data.N) {
         fftw_execute(data.plan);
         for (int i = 0; i < data.N; i++) {
-          data.pwr[i] += pow(data.outbuf[i][RE], 2) + pow(data.outbuf[i][IM], 2);
+	  data.pwr[i] += std::norm(data.outbuf[i]);
         }
         data.repeats_done++;
         fft_pointer = 0;
