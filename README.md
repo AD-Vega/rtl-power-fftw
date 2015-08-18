@@ -89,8 +89,14 @@ Where:
 Example use of `rtl_power_fftw` with `gnuplot` to draw a spectrum into
 a png file:
 
-    ./rtl_power_fftw -f 1420000000 -n 100 -b 512 |\
-        gnuplot -e "set term png;plot '< cat -' u 2:3">plot.png
+    ./rtl_power_fftw -f 1420405752 -n 100 -b 512 |\
+        gnuplot -e "set term png; unset key; plot '-' w l" >plot.png
+
+For quick-and-dirty live monitoring, you can do:
+
+    ./rtl_power_fftw -f 1420405752 -n 100 -b 512 -c |\
+        sed -u '/rtl-power-fftw/s/.*/plot "-"/;s/^$/e/' |\
+        gnuplot
 
 To compile the program, cd into the directory where you have cloned the code
 and do:
