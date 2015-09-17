@@ -76,6 +76,9 @@ Where:
    -t <seconds>,  --time <seconds>
      Integration time in seconds (incompatible with -n).
 
+   -w,  --wall-time
+     Interpret --time as wall time, not accumulated integration time.
+
    --,  --ignore_rest
      Ignores the rest of the labeled arguments following this flag.
 
@@ -85,6 +88,21 @@ Where:
    -h,  --help
      Displays usage information and exits.
 ```
+
+A note about the integration time is in order: the integration time
+specified with the `--time` option is usually considered to be the
+*effective* integration time, i.e., the total number of samples acquired
+divided by the sample rate. If all goes well, the program will run for about
+this long (plus some overhead for setting up the device etc.). However, if
+samples are dropped for any reason (for example, if the CPU can't perform
+the FFTs quickly enough to cope with the actual data rate), the program will
+run for whatever time required to collect the needed number of samples,
+which can be considerably longer than the effective integration time. If you
+need the program to stop after a fixed time -- regardless of the actual
+number of samples collected -- use the `--wall-time` switch. Be warned,
+though, that only *acquisition* is stopped after this time and it can take
+several more seconds for the FFT of the remaining data to be performed (this
+time overhead depends on the nuber of buffers used).
 
 Example use of `rtl_power_fftw` with `gnuplot` to draw a spectrum into
 a png file:
