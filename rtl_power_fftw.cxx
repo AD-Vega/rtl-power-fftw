@@ -213,16 +213,19 @@ int main(int argc, char **argv)
   int cfreq = 89300000;
   int sample_rate = 2000000;
   int integration_time = 0;
-  int integration_time_isSet = 0;
+  bool integration_time_isSet = false;
   int rtl_retval;
   int buffers = 5;
   int buf_length = 16384*100;
   int ppm_error = 0;
   bool endless = false;
+  bool wall_time = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
+    TCLAP::SwitchArg arg_wall_time("w","wall-time","Interpret --time as wall time, not accumulated integration time.",wall_time);
+    cmd.add( arg_wall_time );
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
     TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
@@ -271,6 +274,7 @@ int main(int argc, char **argv)
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
+    wall_time = arg_wall_time.getValue();
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
     // For performance reasons, the actual buffer length should be in the
@@ -286,12 +290,16 @@ int main(int argc, char **argv)
       repeats = buf_length/(2*N);
     if (arg_integration_time.isSet()) {
       integration_time = arg_integration_time.getValue();
-      integration_time_isSet = 1;
+      integration_time_isSet = true;
     }
     //Integration time
     if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
       std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
       return 3;
+    }
+    if (arg_wall_time.isSet() && !arg_integration_time.isSet()) {
+      std::cerr << "Warning: option --wall-time has no effect without --time." << std::endl;
+      wall_time = false;
     }
   }
   catch (TCLAP::ArgException &e) {
@@ -347,7 +355,7 @@ int main(int argc, char **argv)
   int actual_samplerate = rtlsdr_get_sample_rate(dev);
   std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
-  if (integration_time_isSet == 1)
+  if (integration_time_isSet)
     repeats = ceil((double)actual_samplerate * integration_time / N);
 
   int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
@@ -357,7 +365,9 @@ int main(int argc, char **argv)
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Number of device readouts: " << readouts << std::endl;
-  std::cerr << "Expected time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
+  std::cerr << "Estimated time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
+  if (wall_time)
+    std::cerr << "Acquisition will unconditionally terminate after " << integration_time << " seconds." << std::endl;
 
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, buffers);
@@ -373,6 +383,10 @@ int main(int argc, char **argv)
     // Record the start-of-acquisition timestamp.
     std::string startAcqTimestamp = currentDateTime();
     std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+
+    // Calculate the stop time. This will only be effective if --wall-time was given.
+    using steady_clock = std::chrono::steady_clock;
+    steady_clock::time_point stopTime = steady_clock::now() + std::chrono::seconds(integration_time);
 
     std::unique_lock<std::mutex>
       status_lock(data.status_mutex, std::defer_lock);
@@ -405,6 +419,9 @@ int main(int argc, char **argv)
         data.status_change.notify_all();
         status_lock.unlock();
       }
+
+      if (wall_time && (steady_clock::now() >= stopTime))
+        break;
     }
     // Record the end-of-acquisition timestamp.
     std::string endAcqTimestamp = currentDateTime();
@@ -428,7 +445,7 @@ int main(int argc, char **argv)
 
     for (int i = 0; i < N; i++) {
       std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
-                << 10*log10(data.pwr[i]/ repeats) << std::endl;
+                << 10*log10(data.pwr[i]/ data.repeats_done) << std::endl;
     }
     if (endless) {
       // Separate measurement sets with empty lines.
