@@ -392,6 +392,7 @@ int main(int argc, char **argv)
       status_lock(data.status_mutex, std::defer_lock);
     int64_t count = 0;
     while (count <= readouts) {
+    while (successfulReadouts < readouts) {
       // Wait until a buffer is empty
       status_lock.lock();
       data.queue_histogram[data.empty_buffers.size()]++;
