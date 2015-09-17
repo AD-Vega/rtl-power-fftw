@@ -363,8 +363,8 @@ int main(int argc, char **argv)
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
-  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Number of device readouts: " << readouts << std::endl;
+  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Estimated time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
   if (wall_time)
     std::cerr << "Acquisition will unconditionally terminate after " << integration_time << " seconds." << std::endl;
@@ -390,8 +390,9 @@ int main(int argc, char **argv)
 
     std::unique_lock<std::mutex>
       status_lock(data.status_mutex, std::defer_lock);
-    int64_t count = 0;
-    while (count <= readouts) {
+    int64_t deviceReadouts = 0;
+    int64_t successfulReadouts = 0;
+
     while (successfulReadouts < readouts) {
       // Wait until a buffer is empty
       status_lock.lock();
@@ -404,6 +405,7 @@ int main(int argc, char **argv)
       status_lock.unlock();
 
       rtl_retval = read_rtlsdr(buffer);
+      deviceReadouts++;
 
       if (rtl_retval) {
         fprintf(stderr, "Error: dropped samples.\n");
@@ -414,7 +416,7 @@ int main(int argc, char **argv)
         // No need to notify the worker thread in this case.
       }
       else {
-        count++;
+        successfulReadouts++;
         status_lock.lock();
         data.occupied_buffers.push_back(&buffer);
         data.status_change.notify_all();
@@ -424,6 +426,7 @@ int main(int argc, char **argv)
       if (wall_time && (steady_clock::now() >= stopTime))
         break;
     }
+
     // Record the end-of-acquisition timestamp.
     std::string endAcqTimestamp = currentDateTime();
     std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
@@ -434,7 +437,16 @@ int main(int argc, char **argv)
     status_lock.unlock();
     t.join();
 
-    //Write out.
+    // Print a summary.
+    std::cerr << "Actual number of (complex) samples collected: "
+      << (int64_t)N * data.repeats_done << std::endl;
+    std::cerr << "Actual number of device readouts: " << deviceReadouts << std::endl;
+    std::cerr << "Number of successful readouts: " << successfulReadouts << std::endl;
+    std::cerr << "Actual number of averaged spectra: " << data.repeats_done << std::endl;
+    std::cerr << "Effective integration time: " <<
+      (double)N * data.repeats_done / actual_samplerate << " seconds" << std::endl;
+
+    //Write out data.
     std::cout << "# rtl-power-fftw output" << std::endl;
     std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
     std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
