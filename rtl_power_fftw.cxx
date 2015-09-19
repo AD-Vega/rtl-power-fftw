@@ -456,9 +456,19 @@ int main(int argc, char **argv)
     //Interpolate the central point, to cancel DC bias.
     data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
 
+    // Calculate the precision needed for displaying the frequency.
+    const int extraDigitsFreq = 2;
+    const int significantPlacesFreq =
+      ceil(floor(log10(cfreq)) - log10(actual_samplerate/N) + 1 + extraDigitsFreq);
+    const int significantPlacesPwr = 6;
+
     for (int i = 0; i < N; i++) {
-      std::cout << tuned_freq + (i-N/2.0) * ( (double)actual_samplerate / ((double)N ) ) << " "
-                << 10*log10(data.pwr[i]/ data.repeats_done) << std::endl;
+      std::cout << std::setprecision(significantPlacesFreq)
+                << tuned_freq + (i - N/2.0) * actual_samplerate / N
+                << " "
+                << std::setprecision(significantPlacesPwr)
+                << 10*log10(data.pwr[i]/ data.repeats_done)
+                << std::endl;
     }
     if (endless) {
       // Separate measurement sets with empty lines.
