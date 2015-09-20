@@ -478,7 +478,7 @@ int main(int argc, char **argv)
                 << tuned_freq + (i - N/2.0) * actual_samplerate / N
                 << " "
                 << std::setprecision(significantPlacesPwr)
-                << 10*log10(data.pwr[i]/ data.repeats_done)
+                << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate)
                 << std::endl;
     }
     if (endless) {
