@@ -47,7 +47,18 @@ std::string currentDateTime() {
 }
 
 using Buffer = std::vector<uint8_t>;
-using complex = std::complex<double>;
+
+#ifdef FLOAT_FFT
+using fft_datatype = float;
+using fftw_cdt = fftwf_complex;
+#define FFTW(name) fftwf_##name
+#else
+using fft_datatype = double;
+using fftw_cdt = fftw_complex;
+#define FFTW(name) fftw_##name
+#endif // FLOAT_FFT
+
+using complex = std::complex<fft_datatype>;
 
 class Datastore {
   public:
@@ -66,7 +77,7 @@ class Datastore {
     std::vector<int> queue_histogram;
 
     complex *inbuf, *outbuf;
-    fftw_plan plan;
+    FFTW(plan) plan;
     std::vector<double> pwr;
 
     Datastore(int N, int buf_length, int64_t repeats, int buffers);
@@ -87,9 +98,9 @@ Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
   for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
 
-  inbuf = (complex*)fftw_alloc_complex(N);
-  outbuf = (complex*)fftw_alloc_complex(N);
-  plan = fftw_plan_dft_1d(N, (fftw_complex*)inbuf, (fftw_complex*)outbuf,
+  inbuf = (complex*)FFTW(alloc_complex)(N);
+  outbuf = (complex*)FFTW(alloc_complex)(N);
+  plan = FFTW(plan_dft_1d)(N, (fftw_cdt*)inbuf, (fftw_cdt*)outbuf,
 			  FFTW_FORWARD, FFTW_MEASURE);
 }
 
@@ -100,9 +111,9 @@ Datastore::~Datastore() {
   for (auto& buffer : occupied_buffers)
     delete buffer;
 
-  fftw_destroy_plan(plan);
-  fftw_free(inbuf);
-  fftw_free(outbuf);
+  FFTW(destroy_plan)(plan);
+  FFTW(free)(inbuf);
+  FFTW(free)(outbuf);
 }
 
 int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
@@ -163,14 +174,14 @@ void fft(Datastore& data) {
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-        const double multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
+        const fft_datatype multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
 	complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
 	data.inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
 	buffer_pointer += 2;
         fft_pointer++;
       }
       if (fft_pointer == data.N) {
-        fftw_execute(data.plan);
+        FFTW(execute)(data.plan);
         for (int i = 0; i < data.N; i++) {
 	  data.pwr[i] += std::norm(data.outbuf[i]);
         }
