@@ -100,7 +100,7 @@ the FFTs quickly enough to cope with the actual data rate), the program will
 run for whatever time required to collect the needed number of samples,
 which can be considerably longer than the effective integration time. If you
 need the program to stop after a fixed time -- regardless of the actual
-number of samples collected -- use the `--wall-time` switch. Be warned,
+number of samples collected -- use the `--strict-time` switch. Be warned,
 though, that only *acquisition* is stopped after this time and it can take
 several more seconds for the FFT of the remaining data to be performed (this
 time overhead depends on the nuber of buffers used).

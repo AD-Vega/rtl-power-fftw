@@ -298,7 +298,7 @@ int main(int argc, char **argv)
       return 3;
     }
     if (arg_strict_time.isSet() && !arg_integration_time.isSet()) {
-      std::cerr << "Warning: option --wall-time has no effect without --time." << std::endl;
+      std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
       strict_time = false;
     }
   }
@@ -384,7 +384,7 @@ int main(int argc, char **argv)
     std::string startAcqTimestamp = currentDateTime();
     std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
 
-    // Calculate the stop time. This will only be effective if --wall-time was given.
+    // Calculate the stop time. This will only be effective if --strict-time was given.
     using steady_clock = std::chrono::steady_clock;
     steady_clock::time_point stopTime = steady_clock::now() + std::chrono::seconds(integration_time);
 
