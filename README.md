@@ -72,12 +72,13 @@ Where:
 
    -s <bytes>,  --buffer-size <bytes>
      Size of read buffers (leave it unless you know what you are doing).
+     
+   -T,  --strict-time
+     End measurement when the time set with --time option is up, regardless 
+     of gathered samples.
 
    -t <seconds>,  --time <seconds>
      Integration time in seconds (incompatible with -n).
-
-   -w,  --wall-time
-     Interpret --time as wall time, not accumulated integration time.
 
    --,  --ignore_rest
      Ignores the rest of the labeled arguments following this flag.

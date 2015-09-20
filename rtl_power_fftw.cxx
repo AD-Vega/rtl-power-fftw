@@ -219,15 +219,15 @@ int main(int argc, char **argv)
   int buf_length = 16384*100;
   int ppm_error = 0;
   bool endless = false;
-  bool wall_time = false;
+  bool strict_time = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
-    TCLAP::SwitchArg arg_wall_time("w","wall-time","Interpret --time as wall time, not accumulated integration time.",wall_time);
-    cmd.add( arg_wall_time );
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
+    TCLAP::SwitchArg arg_strict_time("T","strict-time","End measurement when the time set with --time option is up, regardless of gathered samples.",strict_time);
+    cmd.add( arg_strict_time );
     TCLAP::ValueArg<int> arg_bufferlen("s","buffer-size","Size of read buffers (leave it unless you know what you are doing).", false, buf_length, "bytes");
     cmd.add( arg_bufferlen );
     TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
@@ -274,7 +274,7 @@ int main(int argc, char **argv)
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
-    wall_time = arg_wall_time.getValue();
+    strict_time = arg_strict_time.getValue();
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
     // For performance reasons, the actual buffer length should be in the
@@ -297,9 +297,9 @@ int main(int argc, char **argv)
       std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
       return 3;
     }
-    if (arg_wall_time.isSet() && !arg_integration_time.isSet()) {
+    if (arg_strict_time.isSet() && !arg_integration_time.isSet()) {
       std::cerr << "Warning: option --wall-time has no effect without --time." << std::endl;
-      wall_time = false;
+      strict_time = false;
     }
   }
   catch (TCLAP::ArgException &e) {
@@ -366,7 +366,7 @@ int main(int argc, char **argv)
   std::cerr << "Number of device readouts: " << readouts << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Estimated time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
-  if (wall_time)
+  if (strict_time)
     std::cerr << "Acquisition will unconditionally terminate after " << integration_time << " seconds." << std::endl;
 
   //Begin the work: prepare data buffers
@@ -423,7 +423,7 @@ int main(int argc, char **argv)
         status_lock.unlock();
       }
 
-      if (wall_time && (steady_clock::now() >= stopTime))
+      if (strict_time && (steady_clock::now() >= stopTime))
         break;
     }
 
