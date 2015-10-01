@@ -321,23 +321,21 @@ int main(int argc, char **argv)
       std::cerr << "Reading baseline from stdin." << std::endl;
       std::string junk;
       double value;
-      while (true) {
-        if ((std::cin >> std::ws).peek() == std::char_traits<char>::to_int_type('#')) {
+
+      // Skip initial commented lines.
+      while ((std::cin >> std::ws).peek() == '#')
           std::getline (std::cin,junk);
-        }
-        else break;
-      }
-      while ( std::cin >> junk >> value ) {
+
+      // Read baseline values.
+      while (std::cin >> junk >> value) {
           baseline_values.push_back(value);
-          std::cin.ignore (std::numeric_limits<std::streamsize>::max(), '\n');
+          std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
+
+      // Check for suitability.
       if ((int)baseline_values.size() != N) {
-        std::cerr << "Error reading baseline. Expected " << N << " samples, found " << baseline_values.size() << std::endl;
-/*
-        for (auto i : baseline_values) {
-          std::cerr << i << std::endl;
-        } 
-*/
+        std::cerr << "Error reading baseline. Expected " << N << " samples, found "
+                  << baseline_values.size() << "." << std::endl;
         std::cerr << "Ignoring baseline data." << std::endl;
         baseline = false;
       }
@@ -509,17 +507,11 @@ int main(int argc, char **argv)
     for (int i = 0; i < N; i++) {
       std::cout << std::setprecision(significantPlacesFreq)
                 << tuned_freq + (i - N/2.0) * actual_samplerate / N
-                << " ";
-      if (baseline) {
-        std::cout << std::setprecision(significantPlacesPwr)
-                  << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate) - baseline_values[i]
-                  << std::endl;
-      }
-      else {
-        std::cout << std::setprecision(significantPlacesPwr)
-                  << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate)
-                  << std::endl;
-      }
+                << " "
+                << std::setprecision(significantPlacesPwr)
+                << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate)
+                   - (baseline ? baseline_values[i] : 0)
+                << std::endl;
     }
     if (endless) {
       // Separate measurement sets with empty lines.
