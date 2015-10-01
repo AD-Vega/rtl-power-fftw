@@ -231,10 +231,14 @@ int main(int argc, char **argv)
   int ppm_error = 0;
   bool endless = false;
   bool strict_time = false;
+  bool baseline = false;
+  std::vector<double> baseline_values;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
+    TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
+    cmd.add( arg_buffers );
     TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
     cmd.add( arg_integration_time );
     TCLAP::SwitchArg arg_strict_time("T","strict-time","End measurement when the time set with --time option is up, regardless of gathered samples.",strict_time);
@@ -257,8 +261,8 @@ int main(int argc, char **argv)
     cmd.add( arg_continue );
     TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
     cmd.add( arg_bins );
-    TCLAP::ValueArg<int> arg_buffers("B","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
-    cmd.add( arg_buffers );
+    TCLAP::SwitchArg arg_baseline("B","baseline","Subtract baseline from stdin.", baseline);
+    cmd.add( arg_baseline );
 
     cmd.parse(argc, argv);
 
@@ -285,6 +289,7 @@ int main(int argc, char **argv)
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
+    baseline = arg_baseline.getValue();
     strict_time = arg_strict_time.getValue();
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
@@ -311,6 +316,34 @@ int main(int argc, char **argv)
     if (arg_strict_time.isSet() && !arg_integration_time.isSet()) {
       std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
       strict_time = false;
+    }
+    if (baseline) {
+      std::cerr << "Reading baseline from stdin." << std::endl;
+      std::string junk;
+      double value;
+      while (true) {
+        if ((std::cin >> std::ws).peek() == std::char_traits<char>::to_int_type('#')) {
+          std::getline (std::cin,junk);
+        }
+        else break;
+      }
+      while ( std::cin >> junk >> value ) {
+          baseline_values.push_back(value);
+          std::cin.ignore (std::numeric_limits<std::streamsize>::max(), '\n');
+      }
+      if ((int)baseline_values.size() != N) {
+        std::cerr << "Error reading baseline. Expected " << N << " samples, found " << baseline_values.size() << std::endl;
+/*
+        for (auto i : baseline_values) {
+          std::cerr << i << std::endl;
+        } 
+*/
+        std::cerr << "Ignoring baseline data." << std::endl;
+        baseline = false;
+      }
+      else {
+        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+      }
     }
   }
   catch (TCLAP::ArgException &e) {
@@ -476,10 +509,17 @@ int main(int argc, char **argv)
     for (int i = 0; i < N; i++) {
       std::cout << std::setprecision(significantPlacesFreq)
                 << tuned_freq + (i - N/2.0) * actual_samplerate / N
-                << " "
-                << std::setprecision(significantPlacesPwr)
-                << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate)
-                << std::endl;
+                << " ";
+      if (baseline) {
+        std::cout << std::setprecision(significantPlacesPwr)
+                  << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate) - baseline_values[i]
+                  << std::endl;
+      }
+      else {
+        std::cout << std::setprecision(significantPlacesPwr)
+                  << 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate)
+                  << std::endl;
+      }
     }
     if (endless) {
       // Separate measurement sets with empty lines.

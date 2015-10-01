@@ -34,17 +34,20 @@ way, C++11 functionality snuck into the program.
 This is the current state of what the program supports:
 
 ```
+
 USAGE: 
 
-   ./rtl_power_fftw  [-B <buffers>] [-b <bins in FFT spectrum>] [-c] [-d
-                     <device index>] [-f <Hz>] [-g <1/10th of dB>] [-n
-                     <repeats>] [-p <ppm>] [-r <samples/s>] [-s <bytes>]
-                     [-t <seconds>] [--] [--version] [-h]
+   ./rtl_power_fftw  [-B] [-b <bins in FFT spectrum>] [-c] [-d <device
+                     index>] [-f <Hz>] [-g <1/10th of dB>] [-n <repeats>]
+                     [-p <ppm>] [-r <samples/s>] [-s <bytes>] [-T] [-t
+                     <seconds>] [--buffers <buffers>] [--] [--version]
+                     [-h]
+
 
 Where: 
 
-   -B <buffers>,  --buffers <buffers>
-     Number of read buffers (don't touch unless running out of memory).
+   -B,  --baseline
+     Subtract baseline from stdin.
 
    -b <bins in FFT spectrum>,  --bins <bins in FFT spectrum>
      Number of bins in FFT spectrum (must be even number)
@@ -72,13 +75,16 @@ Where:
 
    -s <bytes>,  --buffer-size <bytes>
      Size of read buffers (leave it unless you know what you are doing).
-     
+
    -T,  --strict-time
-     End measurement when the time set with --time option is up, regardless 
+     End measurement when the time set with --time option is up, regardless
      of gathered samples.
 
    -t <seconds>,  --time <seconds>
      Integration time in seconds (incompatible with -n).
+
+   --buffers <buffers>
+     Number of read buffers (don't touch unless running out of memory).
 
    --,  --ignore_rest
      Ignores the rest of the labeled arguments following this flag.
@@ -88,6 +94,9 @@ Where:
 
    -h,  --help
      Displays usage information and exits.
+
+
+   Obtain power spectrum from RTL device using FFTW library.
 ```
 
 A note about the integration time is in order: the integration time
