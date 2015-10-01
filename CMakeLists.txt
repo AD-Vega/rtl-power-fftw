@@ -42,3 +42,6 @@ if(FLOAT_FFT)
 else()
   target_link_libraries(rtl_power_fftw ${FFTW3_LDFLAGS})
 endif()
+
+INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/rtl_power_fftw
+  DESTINATION bin)
