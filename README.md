@@ -46,8 +46,8 @@ USAGE:
 
 Where: 
 
-   -B,  --baseline
-     Subtract baseline from stdin.
+   -B <file|->,  --baseline <file|->
+     Subtract baseline, read baseline data from file or stdin.
 
    -b <bins in FFT spectrum>,  --bins <bins in FFT spectrum>
      Number of bins in FFT spectrum (must be even number)

@@ -32,6 +32,7 @@
 #include <thread>
 #include <complex>
 #include <ctime>
+#include <fstream>
 
 #include <fftw3.h>
 #include <rtl-sdr.h>
@@ -262,7 +263,7 @@ int main(int argc, char **argv)
     cmd.add( arg_continue );
     TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
     cmd.add( arg_bins );
-    TCLAP::SwitchArg arg_baseline("B","baseline","Subtract baseline from stdin.", baseline);
+    TCLAP::ValueArg<std::string> arg_baseline("B","baseline","Subtract baseline, read baseline data from file or stdin.",false,"","file|-");
     cmd.add( arg_baseline );
 
     cmd.parse(argc, argv);
@@ -290,7 +291,6 @@ int main(int argc, char **argv)
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
-    baseline = arg_baseline.getValue();
     strict_time = arg_strict_time.getValue();
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
@@ -318,30 +318,43 @@ int main(int argc, char **argv)
       std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
       strict_time = false;
     }
-    if (baseline) {
-      std::cerr << "Reading baseline from stdin." << std::endl;
+    if (arg_baseline.isSet()) {
+      const std::string& fileName = arg_baseline.getValue();
+      std::istream* stream;
+      std::ifstream fs;
+
+      if (fileName == "-") {
+        std::cerr << "Reading baseline from stdin." << std::endl;
+        stream = &std::cin;
+      }
+      else {
+        std::cerr << "Reading baseline from file " << fileName << std::endl;
+        fs.open(fileName);
+        stream = &fs;
+      }
       std::string junk;
       double value;
 
       // Skip initial commented lines.
-      while ((std::cin >> std::ws).peek() == '#')
-          std::getline (std::cin,junk);
+      while ((*stream >> std::ws).peek() == '#')
+          std::getline (*stream, junk);
 
       // Read baseline values.
-      while (std::cin >> junk >> value) {
+      while (*stream >> junk >> value) {
           baseline_values.push_back(value);
-          std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+          stream->ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
 
       // Check for suitability.
-      if ((int)baseline_values.size() != N) {
+      if ((int)baseline_values.size() == N) {
+        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+        baseline = true;
+      }
+      else {
         std::cerr << "Error reading baseline. Expected " << N << " samples, found "
                   << baseline_values.size() << "." << std::endl;
         std::cerr << "Ignoring baseline data." << std::endl;
         baseline = false;
-      }
-      else {
-        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
       }
     }
   }
