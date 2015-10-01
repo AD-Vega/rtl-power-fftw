@@ -31,6 +31,7 @@
 #include <string>
 #include <thread>
 #include <complex>
+#include <ctime>
 
 #include <fftw3.h>
 #include <rtl-sdr.h>
@@ -40,9 +41,9 @@ static rtlsdr_dev_t *dev = nullptr;
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 std::string currentDateTime() {
-  time_t now = time(0);
+  time_t now = std::time(0);
   char buf[80];
-  strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", gmtime(&now));
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
   return buf;
 }
 
