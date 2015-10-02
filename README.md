@@ -29,7 +29,8 @@ program; if you want to stitch spectra together, you can do it with a
 wrapper and multiple calls to `rtl_power_fftw`. Desire to have simple
 code to handle option parsing lead to the choice of TCLAP and
 therefore C++. This further meant that to implement things in a neat
-way, C++11 functionality snuck into the program.
+way, C++11 functionality snuck into the program, therefore a modern, 
+C++11 enabled compiler is needed to compile `rtl_power_fftw`.
 
 This is the current state of what the program supports:
 
@@ -136,12 +137,11 @@ and do:
 
 This should make the `rtl_power_fftw` binary in the build directory.
 If you copy it into a directory in your `PATH`, you can call it from everywhere.
-The install bit of the cmake is still in the TODO phase...
+You can also do `make install` and by default it will be copied to `/usr/local/bin`.
 
 ##TODO:
 
-  - cmake install/uninstall
   - ... (there's allways something, isn't it?!)
 
-Many thanks to Andrej Lajovic for cleaning up the C++ code and implementing a
-better buffer handling system.
+Many thanks to Andrej Lajovic for cleaning up the C++ code, implementing a
+better buffer handling system and relentlessly improving the program.
