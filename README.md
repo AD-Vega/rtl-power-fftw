@@ -38,14 +38,21 @@ This is the current state of what the program supports:
 
 USAGE: 
 
-   ./rtl_power_fftw  [-B] [-b <bins in FFT spectrum>] [-c] [-d <device
-                     index>] [-f <Hz>] [-g <1/10th of dB>] [-n <repeats>]
-                     [-p <ppm>] [-r <samples/s>] [-s <bytes>] [-T] [-t
-                     <seconds>] [--buffers <buffers>] [--] [--version]
-                     [-h]
+   ./rtl_power_fftw  {-f <Hz>|--frange <Hz>} [-B <file|->] [-b <bins in FFT
+                     spectrum>] [-c] [-d <device index>] [-g <1/10th of
+                     dB>] [-n <repeats>] [-p <ppm>] [-r <samples/s>] [-s
+                     <bytes>] [-T] [-t <seconds>] [--buffers <buffers>]
+                     [--] [--version] [-h]
 
 
 Where: 
+
+   -f <Hz>,  --freq <Hz>
+     (OR required)  Center frequency of the receiver.
+         -- OR --
+   --frange <Hz:Hz>
+     (OR required)  Frequency range to scan, in the form start:stop.
+
 
    -B <file|->,  --baseline <file|->
      Subtract baseline, read baseline data from file or stdin.
@@ -58,9 +65,6 @@ Where:
 
    -d <device index>,  --device <device index>
      RTL-SDR device index.
-
-   -f <Hz>,  --freq <Hz>
-     Center frequency of the receiver.
 
    -g <1/10th of dB>,  --gain <1/10th of dB>
      Receiver gain.
@@ -98,6 +102,7 @@ Where:
 
 
    Obtain power spectrum from RTL device using FFTW library.
+
 ```
 
 A note about the integration time is in order: the integration time
