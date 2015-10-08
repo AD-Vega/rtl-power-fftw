@@ -332,17 +332,30 @@ int main(int argc, char **argv)
         fs.open(fileName);
         stream = &fs;
       }
-      std::string junk;
-      double value;
 
-      // Skip initial commented lines.
-      while ((*stream >> std::ws).peek() == '#')
-          std::getline (*stream, junk);
+      // Parse baseline input line by line.
+      std::string line;
+      while (std::getline(*stream, line)) {
+        std::istringstream lineStream(line);
 
-      // Read baseline values.
-      while (*stream >> junk >> value) {
+        if ((lineStream >> std::ws).peek() == '#') {
+          // Commented lines don't count.
+          continue;
+        }
+
+        // The strategy is: we read as much doubles from the line as we can,
+        // and use the last one. Accomodates one column, two columns (the first
+        // one being, for example, frequency), three columns, N columns;
+        // anything goes.
+        double value;
+        unsigned int valuesRead = 0;
+        while (lineStream >> value)
+          valuesRead++;
+
+        // We are being very relaxed here. No doubles in the line? Skip it.
+        // As long as we end up with the right number of values, we're game.
+        if (valuesRead > 0)
           baseline_values.push_back(value);
-          stream->ignore(std::numeric_limits<std::streamsize>::max(), '\n');
       }
 
       // Check for suitability.
