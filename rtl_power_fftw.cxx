@@ -202,15 +202,15 @@ void fft(Datastore& data) {
 int parse_frequency(std::string s) {
   std::istringstream ss(s);
   double f;
-  std::string prefix;
-  ss >> f >> prefix;
-  if (prefix == "k")
+  std::string suffix;
+  ss >> f >> suffix;
+  if (suffix == "k")
     f *= 1e3;
-  else if (prefix == "M")
+  else if (suffix == "M")
     f *= 1e6;
-  else if (prefix == "G")
+  else if (suffix == "G")
     f *= 1e9;
-  else if (prefix != "")
+  else if (suffix != "")
     return -1;
   return (int)f;
 }
@@ -239,7 +239,7 @@ int main(int argc, char **argv)
   int N = 512;
   int dev_index = 0;
   int gain = 372;
-  int cfreq = 1420405751;
+  int cfreq = 1420405752;
   int startfreq = 0; 
   int stopfreq = 0;
   int sample_rate = 2000000;
@@ -319,7 +319,7 @@ int main(int argc, char **argv)
     endless = arg_continue.getValue();
     strict_time = arg_strict_time.getValue();
     //clipped_output_isSet = arg_clipped.getValue();
-    
+
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.
     // For performance reasons, the actual buffer length should be in the
@@ -334,28 +334,27 @@ int main(int argc, char **argv)
       if (cfreq < 0) {
         std::cerr << "Invalid frequency given to --freq: " 
                   << cfreq
-                  << ". Expecting positive number, allowing the k,M,G prefixes. Exiting." 
+                  << ". Expecting a positive number, allowing the k,M,G suffixes. Exiting."
                   << std::endl;
         return 3;
       }
     }
     if (arg_freqr.isSet()) {
       std::istringstream opt(arg_freqr.getValue());
-      std::string strtfreq, stpfreq;
-      if (getline(opt, strtfreq, ':') && getline(opt, stpfreq)) {
-        startfreq = parse_frequency(strtfreq);
-        stopfreq = parse_frequency(stpfreq);
+      std::string startFreqString, stopFreqString;
+      if (getline(opt, startFreqString, ':') && getline(opt, stopFreqString)) {
+        startfreq = parse_frequency(startFreqString);
+        stopfreq = parse_frequency(stopFreqString);
         if (startfreq < 0 || stopfreq < 0 || stopfreq < startfreq) {
           std::cerr << "Invalid frequency range given to --frange: " 
-                  << startfreq
-                  << ":"
-                  << stopfreq
-                  << ". Expecting positive numbers in ascending order, allowing the k,M,G prefixes. Exiting." 
+                  << startfreq << ":" << stopfreq << ". "
+                  << "Expecting positive numbers in ascending order, allowing the k,M,G suffixes. Exiting."
                   << std::endl;
           return 3;
         }
         else {
           freq_hopping_isSet = true;
+          cfreq = (startfreq + stopfreq)/2;
         }
       }
       else {
@@ -468,8 +467,9 @@ int main(int argc, char **argv)
             << " (" << 0.1*gain << " dB)" << std::endl;
   rtlsdr_set_tuner_gain_mode(dev, 1);
   rtlsdr_set_tuner_gain(dev, gain);
-  
-  //Temporarily to to cfreq, just so that device does not complain upon setting sample rate.
+
+  // Temporarily set the frequency to cfreq, just so that the device does not
+  // complain upon setting the sample rate.
   rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)cfreq);
   std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
@@ -489,9 +489,9 @@ int main(int argc, char **argv)
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
   if (integration_time_isSet)
     repeats = ceil((double)actual_samplerate * integration_time / N);
-  
+
   //Frequency hopping
-  //We're stuffing a vector full of frequencies that we wish to in turn tune to.
+  //We're stuffing a vector full of frequencies that we wish to eventually tune to.
   if (freq_hopping_isSet) {
     int hops = ceil((stopfreq - startfreq) / actual_samplerate);
     int overhang = (hops*actual_samplerate - (stopfreq - startfreq)) / (hops + 1);
@@ -505,16 +505,16 @@ int main(int argc, char **argv)
   else {
     freqs_to_tune.push_back(cfreq);
   }
-  
+
   //Check if all frquencies are tunable
   //Warning: librtlsdr does not tell you of all cases when tuner cannot lock PLL, despite clearly writing so to the stderr!
   //TODO: Fix librtlsdr.
-  for (unsigned int i=0; i < freqs_to_tune.size(); i++) {
+  for (unsigned int i = 0; i < freqs_to_tune.size(); i++) {
     rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)freqs_to_tune[i]);
     int tuned_freq = rtlsdr_get_center_freq(dev);
     if ( rtl_retval < 0 || tuned_freq == 0 ) {
       std::cerr << "Unable to tune to " << freqs_to_tune[i] << ". Dropping from frequency list." << std::endl;
-      freqs_to_tune.erase(freqs_to_tune.begin()+i);
+      freqs_to_tune.erase(freqs_to_tune.begin() + i);
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
@@ -536,13 +536,13 @@ int main(int argc, char **argv)
   //Read from device and do FFT
   do {
     for (auto freq : freqs_to_tune) {
-      
+
       //Center frequency
       rtlsdr_set_center_freq(dev, (uint32_t)freq);
       int tuned_freq = rtlsdr_get_center_freq(dev);
       std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
       std::this_thread::sleep_for(std::chrono::milliseconds(5));
-      
+
       std::fill(data.pwr.begin(), data.pwr.end(), 0);
       data.acquisition_finished = false;
       data.repeats_done = 0;
