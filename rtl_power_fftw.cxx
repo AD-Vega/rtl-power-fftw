@@ -642,7 +642,7 @@ int main(int argc, char **argv)
                   << std::endl;
       }
       if (endless || freq_hopping_isSet) {
-        // Separate measurement sets with empty lines.
+        // Separate different spectra with empty lines.
         std::cout << std::endl;
       }
       std::cout.flush();
@@ -651,6 +651,10 @@ int main(int argc, char **argv)
       for (auto size : data.queue_histogram)
         std::cerr << size << " ";
       std::cerr << std::endl;
+    }
+    if (endless) {
+      // Separate measurement sets with two empty lines.
+      std::cout << std::endl;
     }
   } while (endless);
 
