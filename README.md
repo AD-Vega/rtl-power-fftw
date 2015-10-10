@@ -23,14 +23,11 @@ rtlsdr devices were set out:
   - the output of the program should be easy to further use with the 
 	standard tools (like `gnuplot`).
   
-This all lead to dropping the functionality to obtain spectra that are
-wider than what can be sampled at once in a single execution of the
-program; if you want to stitch spectra together, you can do it with a
-wrapper and multiple calls to `rtl_power_fftw`. Desire to have simple
-code to handle option parsing lead to the choice of TCLAP and
-therefore C++. This further meant that to implement things in a neat
-way, C++11 functionality snuck into the program, therefore a modern, 
-C++11 enabled compiler is needed to compile `rtl_power_fftw`.
+The desire to have simple code to handle option parsing lead to the 
+choice of TCLAP and therefore C++. This further meant that to implement 
+things in a neat way, C++11 functionality snuck into the program and 
+therefore a modern, C++11 enabled compiler is needed to 
+compile `rtl_power_fftw`.
 
 This is the current state of what the program supports:
 
@@ -38,7 +35,7 @@ This is the current state of what the program supports:
 
 USAGE: 
 
-   ./rtl_power_fftw  {-f <Hz>|--frange <Hz>} [-B <file|->] [-b <bins in FFT
+   ./rtl_power_fftw  {-f <Hz>|--frange <Hz:Hz>} [-B <file|->] [-b <bins in FFT
                      spectrum>] [-c] [-d <device index>] [-g <1/10th of
                      dB>] [-n <repeats>] [-p <ppm>] [-r <samples/s>] [-s
                      <bytes>] [-T] [-t <seconds>] [--buffers <buffers>]

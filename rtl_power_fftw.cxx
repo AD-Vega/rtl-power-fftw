@@ -202,15 +202,15 @@ void fft(Datastore& data) {
 int parse_frequency(std::string s) {
   std::istringstream ss(s);
   double f;
-  std::string suffix;
-  ss >> f >> suffix;
-  if (suffix == "k")
+  std::string multiplier;
+  ss >> f >> multiplier;
+  if (multiplier == "k")
     f *= 1e3;
-  else if (suffix == "M")
+  else if (multiplier == "M")
     f *= 1e6;
-  else if (suffix == "G")
+  else if (multiplier == "G")
     f *= 1e9;
-  else if (suffix != "")
+  else if (multiplier != "")
     return -1;
   return (int)f;
 }
@@ -334,7 +334,7 @@ int main(int argc, char **argv)
       if (cfreq < 0) {
         std::cerr << "Invalid frequency given to --freq: " 
                   << cfreq
-                  << ". Expecting a positive number, allowing the k,M,G suffixes. Exiting."
+                  << ". Expecting a positive number, allowing the k,M,G multipliers. Exiting."
                   << std::endl;
         return 3;
       }
@@ -348,7 +348,7 @@ int main(int argc, char **argv)
         if (startfreq < 0 || stopfreq < 0 || stopfreq < startfreq) {
           std::cerr << "Invalid frequency range given to --frange: " 
                   << startfreq << ":" << stopfreq << ". "
-                  << "Expecting positive numbers in ascending order, allowing the k,M,G suffixes. Exiting."
+                  << "Expecting positive numbers in ascending order, allowing the k,M,G multipliers. Exiting."
                   << std::endl;
           return 3;
         }
