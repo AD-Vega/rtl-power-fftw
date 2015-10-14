@@ -530,7 +530,7 @@ int main(int argc, char **argv)
   //Adjust buffer length in case of small sample batches.
   if (!buf_length_isSet) {
     int base_buf = 16384;
-    int base_buf_multiplier = (2.0 * N * repeats) / base_buf;
+    int64_t base_buf_multiplier = (2.0 * N * repeats) / base_buf;
     if (base_buf_multiplier <= 100) {
       buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
     }
