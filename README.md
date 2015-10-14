@@ -5,10 +5,10 @@ devices using the FFTW library to do FFT.
 
 It is inspired by the program `rtl_power` in `librtlsdr`.  However, the
 said program has several deficiencies that limit its usage in
-demanding environments, such as radio astronomy. I inspected
-`rtl_power` hoping to modify it and obtain better performance, but
-came to the conclusion that it would be an unfeasible
-task. Measurements of FFT performance showed that the leading library
+demanding environments, such as radio astronomy. An inspection of
+`rtl_power` in hope of modifying it and obtaining better performance
+resulted in the conclusion that it would be an unfeasible task. 
+Measurements of FFT performance showed that the leading library
 in the field of FFT - `fftw` - makes mincemeat of the routine used in
 `rtl_power`, even on simple processors such as raspberryPi. Therefore,
 the following requirements for a program to obtain power spectrum from
