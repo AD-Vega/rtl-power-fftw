@@ -530,19 +530,21 @@ int main(int argc, char **argv)
   //Adjust buffer length in case of small sample batches.
   if (!buf_length_isSet) {
     int base_buf = 16384;
-    int64_t base_buf_multiplier = (2.0 * N * repeats) / base_buf;
+    int base_buf_multiplier = (2.0 * N * repeats) / base_buf;
     if (base_buf_multiplier <= 100) {
-      buf_length = base_buf * base_buf_multiplier;
+      buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
     }
     else if ( base_buf_multiplier <= 10000 ) {
       buf_length = ceil(sqrt((double)base_buf_multiplier));
     }
   }
+
   int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
 
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
+  std::cerr << "Buffer length: " << buf_length << std::endl;
   std::cerr << "Number of device readouts: " << readouts << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
   std::cerr << "Estimated time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
