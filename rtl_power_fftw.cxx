@@ -248,6 +248,7 @@ int main(int argc, char **argv)
   int rtl_retval;
   int buffers = 5;
   int buf_length = 16384*100;
+  bool buf_length_isSet = false;
   int ppm_error = 0;
   bool endless = false;
   bool strict_time = false;
@@ -276,9 +277,8 @@ int main(int argc, char **argv)
     cmd.add( arg_repeats );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
-    TCLAP::ValueArg<std::string> arg_freqr("","frange","Frequency range to scan, in the form start:stop.",false,"","Hz:Hz");
-    TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver.",false,"","Hz");
-    cmd.xorAdd( arg_freq, arg_freqr );
+    TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
+    cmd.add( arg_freq );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
     TCLAP::SwitchArg arg_continue("c","continue","Repeat the same measurement endlessly.", endless);
@@ -330,39 +330,43 @@ int main(int argc, char **argv)
     }
     ppm_error = arg_ppm.getValue();
     if (arg_freq.isSet()) {
-      cfreq = parse_frequency(arg_freq.getValue());
-      if (cfreq < 0) {
-        std::cerr << "Invalid frequency given to --freq: " 
-                  << cfreq
-                  << ". Expecting a positive number, allowing the k,M,G multipliers. Exiting."
-                  << std::endl;
-        return 3;
-      }
-    }
-    if (arg_freqr.isSet()) {
-      std::istringstream opt(arg_freqr.getValue());
-      std::string startFreqString, stopFreqString;
-      if (getline(opt, startFreqString, ':') && getline(opt, stopFreqString)) {
-        startfreq = parse_frequency(startFreqString);
-        stopfreq = parse_frequency(stopFreqString);
-        if (startfreq < 0 || stopfreq < 0 || stopfreq < startfreq) {
-          std::cerr << "Invalid frequency range given to --frange: " 
-                  << startfreq << ":" << stopfreq << ". "
-                  << "Expecting positive numbers in ascending order, allowing the k,M,G multipliers. Exiting."
-                  << std::endl;
-          return 3;
+      std::string a_freq = arg_freq.getValue();
+      std::size_t colon_position = a_freq.find(":");
+      std::istringstream opt(a_freq);
+      if (colon_position != std::string::npos) {
+        std::string startFreqString, stopFreqString;
+        if (getline(opt, startFreqString, ':') && getline(opt, stopFreqString)) {
+          startfreq = parse_frequency(startFreqString);
+          stopfreq = parse_frequency(stopFreqString);
+          if (startfreq < 0 || stopfreq < 0 || stopfreq < startfreq) {
+            std::cerr << "Invalid frequency range given to --freq: " 
+                    << startfreq << ":" << stopfreq << ". "
+                    << "Expecting positive numbers in ascending order, allowing the k,M,G multipliers. Exiting."
+                    << std::endl;
+            return 3;
+          }
+          else {
+            freq_hopping_isSet = true;
+            cfreq = (startfreq + stopfreq)/2;
+          }
         }
         else {
-          freq_hopping_isSet = true;
-          cfreq = (startfreq + stopfreq)/2;
+          std::cerr << "Could not parse frequency range given to --freq: " 
+                    << opt 
+                    << ". Expecting form startfreq:stopfreq. Exiting." 
+                    << std::endl;
+          return 3;
         }
       }
       else {
-        std::cerr << "Could not parse frequency range given to --frange: " 
-                  << opt 
-                  << ". Expecting form startfreq:stopfreq. Exiting." 
-                  << std::endl;
-        return 3;
+        cfreq = parse_frequency(a_freq);
+        if (cfreq < 0) {
+          std::cerr << "Invalid frequency given to --freq: " 
+                    << cfreq
+                    << ". Expecting a positive number, allowing the k,M,G multipliers. Exiting."
+                    << std::endl;
+          return 3;
+        }
       }
     }
     if (arg_repeats.isSet())
@@ -382,6 +386,11 @@ int main(int argc, char **argv)
       std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
       strict_time = false;
     }
+    //Optimally adjust buffer length for small sample sizes only if buffer length is not user defined.
+    if (arg_bufferlen.isSet()) {
+      buf_length_isSet = true;
+    }
+    //Baseline correction
     if (arg_baseline.isSet()) {
       const std::string& fileName = arg_baseline.getValue();
       std::istream* stream;
@@ -518,7 +527,17 @@ int main(int argc, char **argv)
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-
+  //Adjust buffer length in case of small sample batches.
+  if (!buf_length_isSet) {
+    int base_buf = 16384;
+    int64_t base_buf_multiplier = (2.0 * N * repeats) / base_buf;
+    if (base_buf_multiplier <= 100) {
+      buf_length = base_buf * base_buf_multiplier;
+    }
+    else if ( base_buf_multiplier <= 10000 ) {
+      buf_length = ceil(sqrt((double)base_buf_multiplier));
+    }
+  }
   int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
 
   //Print info on capture time and associated specifics.
