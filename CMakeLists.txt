@@ -8,17 +8,17 @@ pkg_check_modules(TCLAP REQUIRED tclap)
 pkg_check_modules(RTLSDR REQUIRED librtlsdr)
 
 include_directories(
-  ${TCLAP_INCLUDES}
-  ${RTLSDR_INCLUDES}
+  ${TCLAP_INCLUDE_DIRS}
+  ${RTLSDR_INCLUDE_DIRS}
 )
 
 if(FLOAT_FFT)
   pkg_check_modules(FFTW3F REQUIRED fftw3f)
-  include_directories(${FFTW3F_INCLUDES})
+  include_directories(${FFTW3F_INCLUDE_DIRS})
   add_definitions(-DFLOAT_FFT)
 else()
   pkg_check_modules(FFTW3 REQUIRED fftw3)
-  include_directories(${FFTW3_INCLUDES})
+  include_directories(${FFTW3_INCLUDE_DIRS})
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall")
