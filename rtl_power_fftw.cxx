@@ -518,6 +518,14 @@ int main(int argc, char **argv)
   if (!buf_length_isSet) {
     int base_buf = 16384;
     int64_t base_buf_multiplier = (2.0 * N * repeats) / base_buf;
+    // Optimisation works like this: if we need to sample less than ~1.6MB, 
+    // make the buffer the smallest possible optimized size that fits all
+    // the data.
+    // If it is longer, but not long enough to make it irrelevant how full
+    // the last buffer is, try to optimize buffer size so that it should fit better,
+    // but without overcomplicating the estimation.
+    // If you know what should fit your purposes well, feel free to override this
+    // simply by assigning buffer length yourself.
     if (base_buf_multiplier <= 100) {
       buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
     }
@@ -547,6 +555,11 @@ int main(int argc, char **argv)
       // Set center frequency.
       rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)*iter);
       int tuned_freq = rtlsdr_get_center_freq(dev);
+      // This sleeping is inherited from other code. There have been hints of strange
+      // behaviour if it was commented out, so we left it in. If you actually know
+      // why this would be necessary (or, to the contrary, that it is complete
+      // bullshit), you are most welcome to explain it here!
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
       // Check if the frequency was actually successfully set.
       if ( rtl_retval < 0 || tuned_freq == 0 ) {
@@ -558,16 +571,10 @@ int main(int argc, char **argv)
       }
       else {
         ++iter;
-        // This sleeping is inherited from oder code. There have been hints of strange
-        /// behaviour if it was commented out, so we left it in. If you actually know
-        // why this would be necessary (or, to the contrary, that it is complete
-        // bullshit), you are most welcome to explain it here!
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        
       }
 
       std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-
       std::fill(data.pwr.begin(), data.pwr.end(), 0);
       data.acquisition_finished = false;
       data.repeats_done = 0;
