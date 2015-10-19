@@ -44,49 +44,50 @@ Datastore::~Datastore() {
   FFTW(free)(outbuf);
 }
 
-void fft(Datastore& data) {
+void Datastore::fftThread()
+{
   std::unique_lock<std::mutex>
-    status_lock(data.status_mutex, std::defer_lock);
+    status_lock(status_mutex, std::defer_lock);
   int fft_pointer = 0;
   while (true) {
     // Wait until we have a bufferful of data
     status_lock.lock();
-    while (data.occupied_buffers.empty() && !data.acquisition_finished)
-      data.status_change.wait(status_lock);
-    if (data.occupied_buffers.empty()) {
+    while (occupied_buffers.empty() && !acquisition_finished)
+      status_change.wait(status_lock);
+    if (occupied_buffers.empty()) {
       // acquisition finished
       break;
     }
-    Buffer& buffer(*data.occupied_buffers.front());
-    data.occupied_buffers.pop_front();
+    Buffer& buffer(*occupied_buffers.front());
+    occupied_buffers.pop_front();
     status_lock.unlock();
     //A neat new loop to avoid having to have data buffer aligned with fft buffer.
     unsigned int buffer_pointer = 0;
-    while (buffer_pointer < buffer.size() && data.repeats_done < data.repeats ) {
-      while (fft_pointer < data.N && buffer_pointer < buffer.size()) {
+    while (buffer_pointer < buffer.size() && repeats_done < repeats ) {
+      while (fft_pointer < N && buffer_pointer < buffer.size()) {
         //The magic aligment happens here: we have to change the phase of each next complex sample
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
         const fft_datatype multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
         complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
-        data.inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
+        inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
         buffer_pointer += 2;
         fft_pointer++;
       }
-      if (fft_pointer == data.N) {
-        FFTW(execute)(data.plan);
-        for (int i = 0; i < data.N; i++) {
-          data.pwr[i] += std::norm(data.outbuf[i]);
+      if (fft_pointer == N) {
+        FFTW(execute)(plan);
+        for (int i = 0; i < N; i++) {
+          pwr[i] += std::norm(outbuf[i]);
         }
-        data.repeats_done++;
+        repeats_done++;
         fft_pointer = 0;
       }
     }
 
     status_lock.lock();
-    data.empty_buffers.push_back(&buffer);
-    data.status_change.notify_all();
+    empty_buffers.push_back(&buffer);
+    status_change.notify_all();
     status_lock.unlock();
   }
 }

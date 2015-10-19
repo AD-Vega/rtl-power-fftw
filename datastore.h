@@ -70,8 +70,9 @@ class Datastore {
     Datastore(Datastore&&) = delete;
     Datastore& operator=(const Datastore&) = delete;
     Datastore& operator=(Datastore&&) = delete;
-};
 
-void fft(Datastore& data);
+    // This function will be started in a separate thread.
+    void fftThread();
+};
 
 #endif // DATASTORE_H

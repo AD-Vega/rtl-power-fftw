@@ -459,7 +459,6 @@ int main(int argc, char **argv)
       }
       else {
         ++iter;
-        
       }
 
       std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
@@ -467,7 +466,7 @@ int main(int argc, char **argv)
       data.acquisition_finished = false;
       data.repeats_done = 0;
 
-      std::thread t(&fft, std::ref(data));
+      std::thread t(&Datastore::fftThread, std::ref(data));
 
       // Record the start-of-acquisition timestamp.
       std::string startAcqTimestamp = currentDateTime();
