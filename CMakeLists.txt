@@ -29,7 +29,10 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 endif(NOT CMAKE_BUILD_TYPE)
 
-add_executable(rtl_power_fftw rtl_power_fftw.cxx)
+add_executable(rtl_power_fftw
+  rtl_power_fftw.cxx
+  datastore.cxx
+)
 
 target_link_libraries(rtl_power_fftw
   ${TCLAP_LDFLAGS}

@@ -19,24 +19,22 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-#include <deque>
 #include <iostream>
 #include <limits>
 #include <mutex>
 #include <string>
 #include <thread>
-#include <complex>
 #include <ctime>
 #include <fstream>
 
-#include <fftw3.h>
 #include <rtl-sdr.h>
 #include <tclap/CmdLine.h>
+
+#include "datastore.h"
 
 static rtlsdr_dev_t *dev = nullptr;
 
@@ -48,75 +46,6 @@ std::string currentDateTime() {
   return buf;
 }
 
-using Buffer = std::vector<uint8_t>;
-
-#ifdef FLOAT_FFT
-using fft_datatype = float;
-using fftw_cdt = fftwf_complex;
-#define FFTW(name) fftwf_##name
-#else
-using fft_datatype = double;
-using fftw_cdt = fftw_complex;
-#define FFTW(name) fftw_##name
-#endif // FLOAT_FFT
-
-using complex = std::complex<fft_datatype>;
-
-class Datastore {
-  public:
-    int N;
-    int buffers;
-    int64_t repeats;
-    int64_t repeats_done = 0;
-
-    std::mutex status_mutex;
-    // Access to the following objects must be protected by locking
-    // status_mutex.
-    std::deque<Buffer*> empty_buffers;
-    std::deque<Buffer*> occupied_buffers;
-    bool acquisition_finished = false;
-    std::condition_variable status_change;
-    std::vector<int> queue_histogram;
-
-    complex *inbuf, *outbuf;
-    FFTW(plan) plan;
-    std::vector<double> pwr;
-
-    Datastore(int N, int buf_length, int64_t repeats, int buffers);
-    ~Datastore();
-
-    // Delete these so we don't accidentally mess anything up by copying
-    // pointers to fftw_malloc'd buffers.
-    Datastore(const Datastore&) = delete;
-    Datastore(Datastore&&) = delete;
-    Datastore& operator=(const Datastore&) = delete;
-    Datastore& operator=(Datastore&&) = delete;
-};
-
-Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
-  N(N_), buffers(buffers_), repeats(repeats_),
-  queue_histogram(buffers_+1, 0), pwr(N)
-{
-  for (int i = 0; i < buffers; i++)
-    empty_buffers.push_back(new Buffer(buf_length));
-
-  inbuf = (complex*)FFTW(alloc_complex)(N);
-  outbuf = (complex*)FFTW(alloc_complex)(N);
-  plan = FFTW(plan_dft_1d)(N, (fftw_cdt*)inbuf, (fftw_cdt*)outbuf,
-			  FFTW_FORWARD, FFTW_MEASURE);
-}
-
-Datastore::~Datastore() {
-  for (auto& buffer : empty_buffers)
-    delete buffer;
-
-  for (auto& buffer : occupied_buffers)
-    delete buffer;
-
-  FFTW(destroy_plan)(plan);
-  FFTW(free)(inbuf);
-  FFTW(free)(outbuf);
-}
 
 int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
   int dif = std::numeric_limits<int>::max();
@@ -130,6 +59,7 @@ int select_nearest_gain(int gain, const std::vector<int>& gain_table) {
   }
   return selected;
 }
+
 
 void print_gain_table(const std::vector<int>& gain_table) {
   std::cerr << "Available gains (in 1/10th of dB): ";
@@ -150,53 +80,6 @@ int read_rtlsdr(Buffer& buffer) {
     return 1;
   }
   return 0;
-}
-
-void fft(Datastore& data) {
-  std::unique_lock<std::mutex>
-    status_lock(data.status_mutex, std::defer_lock);
-  int fft_pointer = 0;
-  while (true) {
-    // Wait until we have a bufferful of data
-    status_lock.lock();
-    while (data.occupied_buffers.empty() && !data.acquisition_finished)
-      data.status_change.wait(status_lock);
-    if (data.occupied_buffers.empty()) {
-      // acquisition finished
-      break;
-    }
-    Buffer& buffer(*data.occupied_buffers.front());
-    data.occupied_buffers.pop_front();
-    status_lock.unlock();
-    //A neat new loop to avoid having to have data buffer aligned with fft buffer.
-    unsigned int buffer_pointer = 0;
-    while (buffer_pointer < buffer.size() && data.repeats_done < data.repeats ) {
-      while (fft_pointer < data.N && buffer_pointer < buffer.size()) {
-        //The magic aligment happens here: we have to change the phase of each next complex sample
-        //by pi - this means that even numbered samples stay the same while odd numbered samples
-        //get multiplied by -1 (thus rotated by pi in complex plane).
-        //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-        const fft_datatype multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
-	complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
-	data.inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
-	buffer_pointer += 2;
-        fft_pointer++;
-      }
-      if (fft_pointer == data.N) {
-        FFTW(execute)(data.plan);
-        for (int i = 0; i < data.N; i++) {
-	  data.pwr[i] += std::norm(data.outbuf[i]);
-        }
-        data.repeats_done++;
-        fft_pointer = 0;
-      }
-    }
-
-    status_lock.lock();
-    data.empty_buffers.push_back(&buffer);
-    data.status_change.notify_all();
-    status_lock.unlock();
-  }
 }
 
 int parse_frequency(std::string s) {
