@@ -30,9 +30,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif(NOT CMAKE_BUILD_TYPE)
 
 add_executable(rtl_power_fftw
-  rtl_power_fftw.cxx
-  datastore.cxx
-  params.cxx
+  src/rtl_power_fftw.cxx
+  src/datastore.cxx
+  src/params.cxx
 )
 
 target_link_libraries(rtl_power_fftw
