@@ -52,16 +52,28 @@ double parse_time(std::string s) {
   double value;
   char unit;
   double t = 0;
+  // We'll use these to prevent the same unit from being used twice (as it is
+  // most likely a user mistake).
+  bool days_consumed, hours_consumed, minutes_consumed, seconds_consumed;
+  days_consumed = hours_consumed = minutes_consumed = seconds_consumed = false;
 
   while (ss >> value && ss.get(unit)) {
-    if (unit == 'd')
+    if (unit == 'd' && !days_consumed) {
       t += value*86400;
-    else if (unit == 'h')
+      days_consumed = true;
+    }
+    else if (unit == 'h' && !hours_consumed) {
       t += value*3600;
-    else if (unit == 'm')
+      hours_consumed = true;
+    }
+    else if (unit == 'm' && !minutes_consumed) {
       t += value*60;
-    else if (unit == 's')
+      minutes_consumed = true;
+    }
+    else if (unit == 's' && !seconds_consumed) {
       t += value;
+      seconds_consumed = true;
+    }
     else
       return -1;
   }
