@@ -78,7 +78,7 @@ Where:
      of gathered samples.
 
    -t <seconds>,  --time <seconds>
-     Integration time in seconds (incompatible with -n).
+     Integration time (incompatible with -n).
 
    --buffers <buffers>
      Number of read buffers (don't touch unless running out of memory).
@@ -94,6 +94,7 @@ Where:
 
 
    Obtain power spectrum from RTL device using FFTW library.
+
 ```
 
 A note about the integration time is in order: the integration time

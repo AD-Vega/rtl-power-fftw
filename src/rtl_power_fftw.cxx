@@ -202,7 +202,7 @@ int main(int argc, char **argv)
   std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
   //It is only fair to calculate repeats with actual samplerate, not our wishes.
   if (params.integration_time_isSet)
-    repeats = ceil((double)actual_samplerate * params.integration_time / N);
+    repeats = ceil(actual_samplerate * params.integration_time / N);
 
   //Frequency hopping
   //We're stuffing a vector full of frequencies that we wish to eventually tune to.
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
 
       // Calculate the stop time. This will only be effective if --strict-time was given.
       using steady_clock = std::chrono::steady_clock;
-      steady_clock::time_point stopTime = steady_clock::now() + std::chrono::seconds(params.integration_time);
+      steady_clock::time_point stopTime = steady_clock::now() + std::chrono::milliseconds(int64_t(params.integration_time*1000));
 
       std::unique_lock<std::mutex>
         status_lock(data.status_mutex, std::defer_lock);

@@ -42,7 +42,7 @@ public:
   int startfreq = 0; 
   int stopfreq = 0;
   int sample_rate = 2000000;
-  int integration_time = 0;
+  double integration_time = 0;
   bool integration_time_isSet = false;
   int buffers = 5;
   int buf_length = base_buf * default_buf_multiplier;

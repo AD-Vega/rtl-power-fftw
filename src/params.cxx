@@ -41,6 +41,33 @@ int parse_frequency(std::string s) {
   return (int)f;
 }
 
+double parse_time(std::string s) {
+  std::string permitted_units = "dhms";
+  if (permitted_units.find(s.back()) == std::string::npos)
+    s.push_back('s');
+  std::stringstream ss(s);
+  double temp;
+  double t = 0;
+  std::string remainder;
+  while (ss >> temp >> remainder) {
+    if (remainder[0] == 'd')
+      t += temp*86400;
+    else if (remainder[0] == 'h')
+      t += temp*3600;
+    else if (remainder[0] == 'm')
+      t += temp*60;
+    else if (remainder[0] == 's')
+      t += temp;
+    else
+      return -1;
+    remainder.erase(0,1);
+    ss.str("");
+    ss.clear();
+    ss << remainder;
+  }
+  return t;
+}
+
 class NegativeArgException {
 public:
   NegativeArgException(std::string msg_) : msg(msg_) {}
@@ -65,7 +92,7 @@ ReturnValue Params::parse(int argc, char** argv) {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
     TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
     cmd.add( arg_buffers );
-    TCLAP::ValueArg<int> arg_integration_time("t","time","Integration time in seconds (incompatible with -n).",false,integration_time,"seconds");
+    TCLAP::ValueArg<std::string> arg_integration_time("t","time","Integration time (incompatible with -n).",false,"","seconds");
     cmd.add( arg_integration_time );
     TCLAP::SwitchArg arg_strict_time("T","strict-time","End measurement when the time set with --time option is up, regardless of gathered samples.",strict_time);
     cmd.add( arg_strict_time );
@@ -94,7 +121,7 @@ ReturnValue Params::parse(int argc, char** argv) {
 
     try {
       // Ain't this C++11 f**** magic? Watch this:
-      ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_gain, &arg_integration_time, &arg_index, &arg_buffers, &arg_bufferlen});
+      ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_gain, &arg_index, &arg_buffers, &arg_bufferlen});
       ensure_positive_arg<int64_t>({&arg_repeats});
     }
     catch (NegativeArgException& e) {
@@ -172,7 +199,13 @@ ReturnValue Params::parse(int argc, char** argv) {
     else
       repeats = buf_length/(2*N);
     if (arg_integration_time.isSet()) {
-      integration_time = arg_integration_time.getValue();
+      integration_time = parse_time(arg_integration_time.getValue());
+      if (integration_time <= 0) {
+        std::cerr << "Could not parse value given to --time. "
+                  << "Expecting format [WdXhYm]Z[s]. Exiting."
+                  << std::endl;
+        return ReturnValue::InvalidArgument;
+      }
       integration_time_isSet = true;
     }
     //Integration time
