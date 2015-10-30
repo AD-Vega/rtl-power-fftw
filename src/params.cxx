@@ -42,30 +42,36 @@ int parse_frequency(std::string s) {
 }
 
 double parse_time(std::string s) {
+  // The string should end with an unit. If no unit is present, we assume that
+  // the last number is in seconds.
   std::string permitted_units = "dhms";
   if (permitted_units.find(s.back()) == std::string::npos)
     s.push_back('s');
+
   std::stringstream ss(s);
-  double temp;
+  double value;
+  char unit;
   double t = 0;
-  std::string remainder;
-  while (ss >> temp >> remainder) {
-    if (remainder[0] == 'd')
-      t += temp*86400;
-    else if (remainder[0] == 'h')
-      t += temp*3600;
-    else if (remainder[0] == 'm')
-      t += temp*60;
-    else if (remainder[0] == 's')
-      t += temp;
+
+  while (ss >> value && ss.get(unit)) {
+    if (unit == 'd')
+      t += value*86400;
+    else if (unit == 'h')
+      t += value*3600;
+    else if (unit == 'm')
+      t += value*60;
+    else if (unit == 's')
+      t += value;
     else
       return -1;
-    remainder.erase(0,1);
-    ss.str("");
-    ss.clear();
-    ss << remainder;
   }
-  return t;
+
+  if (ss.eof())
+    return t;
+  else {
+    // Unconsumed input left - this indicates a parse error.
+    return -1;
+  }
 }
 
 class NegativeArgException {
@@ -201,7 +207,7 @@ ReturnValue Params::parse(int argc, char** argv) {
     if (arg_integration_time.isSet()) {
       integration_time = parse_time(arg_integration_time.getValue());
       if (integration_time <= 0) {
-        std::cerr << "Could not parse value given to --time. "
+        std::cerr << "Could not parse the value given to --time. "
                   << "Expecting format [WdXhYm]Z[s]. Exiting."
                   << std::endl;
         return ReturnValue::InvalidArgument;
