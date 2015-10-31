@@ -57,11 +57,14 @@ class Datastore {
     std::condition_variable status_change;
     std::vector<int> queue_histogram;
 
+    bool window;
+    std::vector<float>& window_values;
+
     complex *inbuf, *outbuf;
     FFTW(plan) plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int64_t repeats, int buffers);
+    Datastore(int N, int buf_length, int64_t repeats, int buffers, bool window, std::vector<float>& window_values);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying

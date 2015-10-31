@@ -19,9 +19,10 @@
 
 #include "datastore.h"
 
-Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_) :
+Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_, bool window_, std::vector<float>& window_values_) :
   N(N_), buffers(buffers_), repeats(repeats_),
-  queue_histogram(buffers_+1, 0), pwr(N)
+  queue_histogram(buffers_+1, 0), window(window_),
+  window_values(window_values_), pwr(N)
 {
   for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
@@ -72,6 +73,8 @@ void Datastore::fftThread()
         const fft_datatype multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
         complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
         inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
+        if (window)
+          inbuf[fft_pointer] *= window_values[fft_pointer];
         buffer_pointer += 2;
         fft_pointer++;
       }
