@@ -84,11 +84,41 @@ int read_rtlsdr(Buffer& buffer) {
   return 0;
 }
 
+template <typename T>
+std::vector<T> read_inputfile(std::istream* stream) {
+  // Parse baseline input line by line.
+  std::vector<T> values;
+  std::string line;
+  while (std::getline(*stream, line)) {
+    std::istringstream lineStream(line);
+
+    if ((lineStream >> std::ws).peek() == '#') {
+      // Commented lines don't count.
+      continue;
+    }
+    // The strategy is: we read as much doubles from the line as we can,
+    // and use the last one. Accomodates one column, two columns (the first
+    // one being, for example, frequency), three columns, N columns;
+    // anything goes.
+    double value;
+    unsigned int valuesRead = 0;
+    while (lineStream >> value)
+      valuesRead++;
+
+    // We are being very relaxed here. No doubles in the line? Skip it.
+    // As long as we end up with the right number of values, we're game.
+    if (valuesRead > 0)
+      values.push_back(value);
+  }
+  return values;
+}
+
 
 int main(int argc, char **argv)
 {
   int rtl_retval;
   std::vector<double> baseline_values;
+  std::vector<float> window_values;
   std::list<int> freqs_to_tune;
 
   Params params;
@@ -100,57 +130,87 @@ int main(int argc, char **argv)
   int& N = params.N;
   int& buf_length = params.buf_length;
   bool& baseline = params.baseline;
+  bool& window = params.window;
   int64_t& repeats = params.repeats;
 
-  //Baseline correction
-  if (baseline) {
-    std::istream* stream;
-    std::ifstream fs;
-
-    if (params.baseline_file == "-") {
-      std::cerr << "Reading baseline from stdin." << std::endl;
-      stream = &std::cin;
-    }
-    else {
-      std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
-      fs.open(params.baseline_file);
-      stream = &fs;
-    }
-
-    // Parse baseline input line by line.
-    std::string line;
-    while (std::getline(*stream, line)) {
-      std::istringstream lineStream(line);
-
-      if ((lineStream >> std::ws).peek() == '#') {
-        // Commented lines don't count.
-        continue;
+  std::istream* stream;
+  std::ifstream fs;
+  // Window function and baseline correction
+  // If both are read from stdin, we read it all in one go,
+  // and see if the total number of values adds up to what we need.
+  // If so, the first half is window data, and the other half is
+  // baseline data. Window data are floats, as our samples are only
+  // 8-bit anyway, but baseline is double, as we can average a lot of
+  // spectra and gain considerable precision in this manner.
+  if (window && baseline && params.window_file == "-" && params.baseline_file == "-") {
+    stream = &std::cin;
+    std::vector<double> values = read_inputfile<double>(stream);
+    if ((int)values.size() == 2*N) {
+      std::size_t const half_size = window_values.size() / 2;
+      for (std::size_t i=0; i < values.size(); i++) {
+        if ( i < half_size )
+          window_values.push_back((float)values[i]);
+        else
+          baseline_values.push_back(values[i]);
       }
-
-      // The strategy is: we read as much doubles from the line as we can,
-      // and use the last one. Accomodates one column, two columns (the first
-      // one being, for example, frequency), three columns, N columns;
-      // anything goes.
-      double value;
-      unsigned int valuesRead = 0;
-      while (lineStream >> value)
-        valuesRead++;
-
-      // We are being very relaxed here. No doubles in the line? Skip it.
-      // As long as we end up with the right number of values, we're game.
-      if (valuesRead > 0)
-        baseline_values.push_back(value);
-    }
-
-    // Check for suitability.
-    if ((int)baseline_values.size() == N) {
+      std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
       std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
     }
     else {
-      std::cerr << "Error reading baseline. Expected " << N << " samples, found "
-                << baseline_values.size() << "." << std::endl;
-      std::cerr << "Ignoring baseline data." << std::endl;
+      std::cerr << "Error reading window function and baseline from stdin. Expected " << 2*N << " values, found "
+                << values.size() << "." << std::endl;
+      window = false;
       baseline = false;
+    }
+  }
+  // In other scenarios we can safely read window function and
+  // baseline data separately, as there is certainly no clash
+  // on stdin anymore. The reason why we don't read all the data
+  // separately in all cases is the ease with which we test for unsuitable input
+  // data (too many points) if we read all of it and see if there is
+  // just enough data points.
+  else {
+    if (window) {
+      if (params.window_file == "-") {
+        stream = &std::cin;
+      }
+      else {
+        fs.open(params.window_file);
+        stream = &fs;
+      }
+      window_values = read_inputfile<float>(stream);
+      // Check for suitability.
+      if ((int)window_values.size() == N) {
+        std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
+      }
+      else {
+        std::cerr << "Error reading window function. Expected " << N << " values, found "
+                  << window_values.size() << "." << std::endl;
+        std::cerr << "Ignoring window function data." << std::endl;
+        window = false;
+      }
+    }
+    if (baseline) {
+      if (params.baseline_file == "-") {
+        std::cerr << "Reading baseline from stdin." << std::endl;
+        stream = &std::cin;
+      }
+      else {
+        std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
+        fs.open(params.baseline_file);
+        stream = &fs;
+      }
+      baseline_values = read_inputfile<double>(stream);
+      // Check for suitability.
+      if ((int)baseline_values.size() == N) {
+        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+      }
+      else {
+        std::cerr << "Error reading baseline. Expected " << N << " values, found "
+                  << baseline_values.size() << "." << std::endl;
+        std::cerr << "Ignoring baseline data." << std::endl;
+        baseline = false;
+      }
     }
   }
 
@@ -254,7 +314,7 @@ int main(int argc, char **argv)
     std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
 
   //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, repeats, params.buffers);
+  Datastore data(N, buf_length, repeats, params.buffers, params.window, std::ref(window_values));
 
   //Read from device and do FFT
   do {

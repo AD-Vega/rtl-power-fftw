@@ -110,6 +110,8 @@ ReturnValue Params::parse(int argc, char** argv) {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "0.1");
     TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
     cmd.add( arg_buffers );
+    TCLAP::ValueArg<std::string> arg_window("w","window","Use window function, from file or stdin.",false,"","file|-");
+    cmd.add( arg_window );
     TCLAP::ValueArg<std::string> arg_integration_time("t","time","Integration time (incompatible with -n).",false,"","seconds");
     cmd.add( arg_integration_time );
     TCLAP::SwitchArg arg_strict_time("T","strict-time","End measurement when the time set with --time option is up, regardless of gathered samples.",strict_time);
@@ -242,6 +244,9 @@ ReturnValue Params::parse(int argc, char** argv) {
     baseline = arg_baseline.isSet();
     if (baseline)
       baseline_file = arg_baseline.getValue();
+    window = arg_window.isSet();
+    if (window)
+      window_file = arg_window.getValue();
   }
   catch (TCLAP::ArgException &e) {
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
