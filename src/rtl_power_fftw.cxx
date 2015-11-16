@@ -100,7 +100,7 @@ std::vector<T> read_inputfile(std::istream* stream) {
     // and use the last one. Accomodates one column, two columns (the first
     // one being, for example, frequency), three columns, N columns;
     // anything goes.
-    double value;
+    T value;
     unsigned int valuesRead = 0;
     while (lineStream >> value)
       valuesRead++;
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
     std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
 
   //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, repeats, params.buffers, params.window, std::ref(window_values));
+  Datastore data(N, buf_length, repeats, params.buffers, params.window, window_values);
 
   //Read from device and do FFT
   do {
