@@ -439,10 +439,8 @@ int main(int argc, char **argv)
                   << pwrdb
                   << std::endl;
       }
-      if (params.endless || params.freq_hopping_isSet) {
-        // Separate different spectra with empty lines.
-        std::cout << std::endl;
-      }
+      // Separate consecutive spectra with empty lines.
+      std::cout << std::endl;
       std::cout.flush();
 
       std::cerr << "Buffer queue histogram: ";
@@ -450,10 +448,8 @@ int main(int argc, char **argv)
         std::cerr << size << " ";
       std::cerr << std::endl;
     }
-    if (params.endless) {
-      // Separate measurement sets with two empty lines.
-      std::cout << std::endl;
-    }
+    // Mark the end of a measurement set with another empty line.
+    std::cout << std::endl;
   } while (params.endless);
 
   rtlsdr_close(dev);
