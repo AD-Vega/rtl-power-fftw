@@ -78,7 +78,6 @@ int read_rtlsdr(Buffer& buffer) {
   rtlsdr_reset_buffer(dev);
   rtlsdr_read_sync(dev, buffer.data(), buffer.size(), &n_read);
   if (n_read != (signed)buffer.size()) {
-    //fprintf(stderr, "Error: dropped samples.\n");
     return 1;
   }
   return 0;
@@ -375,7 +374,7 @@ int main(int argc, char **argv)
         deviceReadouts++;
 
         if (rtl_retval) {
-          fprintf(stderr, "Error: dropped samples.\n");
+          std::cerr << "Error: dropped samples." << std::endl;
           // There is effectively no data in this buffer - consider it empty.
           status_lock.lock();
           data.empty_buffers.push_back(&buffer);
