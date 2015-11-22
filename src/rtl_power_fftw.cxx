@@ -17,6 +17,7 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -28,6 +29,7 @@
 #include <limits>
 #include <list>
 #include <mutex>
+#include <signal.h>
 #include <string>
 #include <thread>
 #include <ctime>
@@ -39,6 +41,12 @@
 #include "params.h"
 
 static rtlsdr_dev_t *dev = nullptr;
+std::atomic<bool> interrupted(false);
+
+// Signal handler that will get invoked on Ctrl+C
+void CtrlC_handler(int signal) {
+  interrupted = true;
+}
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 std::string currentDateTime() {
@@ -315,6 +323,17 @@ int main(int argc, char **argv)
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, params.buffers, params.window, window_values);
 
+  // Install signal handler for detecting a Ctrl+C. The signal handler will be
+  // configured to run only once - a second Ctrl+C will abort the program
+  // immediately.
+  struct sigaction action;
+  action.sa_handler = &CtrlC_handler;
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  action.sa_mask = sigset;
+  action.sa_flags = SA_RESETHAND;
+  sigaction(SIGINT, &action, nullptr);
+
   //Read from device and do FFT
   do {
     for (auto iter = freqs_to_tune.begin(); iter != freqs_to_tune.end();) {
@@ -391,6 +410,10 @@ int main(int argc, char **argv)
 
         if (params.strict_time && (steady_clock::now() >= stopTime))
           break;
+
+        // See if we have been interrupted with Ctrl+C.
+        if (interrupted)
+          break;
       }
 
       // Record the end-of-acquisition timestamp.
@@ -446,6 +469,9 @@ int main(int argc, char **argv)
       for (auto size : data.queue_histogram)
         std::cerr << size << " ";
       std::cerr << std::endl;
+
+      if (interrupted)
+        break;
     }
     // Mark the end of a measurement set with another empty line.
     std::cout << std::endl;
