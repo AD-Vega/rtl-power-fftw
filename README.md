@@ -121,7 +121,7 @@ a png file:
 For quick-and-dirty live monitoring, you can do:
 
     ./rtl_power_fftw -f 1420405752 -n 100 -b 512 -c |\
-        sed -u '/rtl-power-fftw/s/.*/plot "-"/;/^$/{N;s/.*/e/}' |\
+        sed -u '/rtl-power-fftw/s/.*/plot "-"/;/^$/{N;s/^\n$/e/}' |\
         gnuplot
 
 To compile the program, cd into the directory where you have cloned the code
