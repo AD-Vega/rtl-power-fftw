@@ -27,9 +27,9 @@ Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_, boo
   for (int i = 0; i < buffers; i++)
     empty_buffers.push_back(new Buffer(buf_length));
 
-  inbuf = (complex*)FFTW(alloc_complex)(N);
-  outbuf = (complex*)FFTW(alloc_complex)(N);
-  plan = FFTW(plan_dft_1d)(N, (fftw_cdt*)inbuf, (fftw_cdt*)outbuf,
+  inbuf = (complex*)fftwf_alloc_complex(N);
+  outbuf = (complex*)fftwf_alloc_complex(N);
+  plan = fftwf_plan_dft_1d(N, (fftwf_complex*)inbuf, (fftwf_complex*)outbuf,
                           FFTW_FORWARD, FFTW_MEASURE);
 }
 
@@ -40,9 +40,9 @@ Datastore::~Datastore() {
   for (auto& buffer : occupied_buffers)
     delete buffer;
 
-  FFTW(destroy_plan)(plan);
-  FFTW(free)(inbuf);
-  FFTW(free)(outbuf);
+  fftwf_destroy_plan(plan);
+  fftwf_free(inbuf);
+  fftwf_free(outbuf);
 }
 
 void Datastore::fftThread()
@@ -70,7 +70,7 @@ void Datastore::fftThread()
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
         //This gets us output spectrum shifted by half its size - just what we need to get the output right.
-        const fft_datatype multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
+        const float multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
         complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
         inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
         if (window)
@@ -79,7 +79,7 @@ void Datastore::fftThread()
         fft_pointer++;
       }
       if (fft_pointer == N) {
-        FFTW(execute)(plan);
+        fftwf_execute(plan);
         for (int i = 0; i < N; i++) {
           pwr[i] += std::norm(outbuf[i]);
         }

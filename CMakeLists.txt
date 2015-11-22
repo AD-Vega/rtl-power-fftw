@@ -2,14 +2,14 @@ cmake_minimum_required (VERSION 2.6)
 project(rtl_power_fftw)
 include(FindPkgConfig)
 
-option(FLOAT_FFT "Perform FFTs with single precision floats")
-
 pkg_check_modules(TCLAP REQUIRED tclap)
 pkg_check_modules(RTLSDR REQUIRED librtlsdr)
+pkg_check_modules(FFTW3F REQUIRED fftw3f)
 
 include_directories(
   ${TCLAP_INCLUDE_DIRS}
   ${RTLSDR_INCLUDE_DIRS}
+  ${FFTW3F_INCLUDE_DIRS}
 )
 
 # Check for 'long long int' to make TCLAP happy.
@@ -20,15 +20,6 @@ if(HAVE_LONG_LONG)
 else()
   message(FATAL_ERROR
     "${PROJECT_NAME} requires the 'long long int' type to compile!")
-endif()
-
-if(FLOAT_FFT)
-  pkg_check_modules(FFTW3F REQUIRED fftw3f)
-  include_directories(${FFTW3F_INCLUDE_DIRS})
-  add_definitions(-DFLOAT_FFT)
-else()
-  pkg_check_modules(FFTW3 REQUIRED fftw3)
-  include_directories(${FFTW3_INCLUDE_DIRS})
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall")
@@ -46,16 +37,11 @@ add_executable(rtl_power_fftw
 )
 
 target_link_libraries(rtl_power_fftw
+  ${FFTW3F_LDFLAGS}
   ${TCLAP_LDFLAGS}
   ${RTLSDR_LDFLAGS}
   m
 )
-
-if(FLOAT_FFT)
-  target_link_libraries(rtl_power_fftw ${FFTW3F_LDFLAGS})
-else()
-  target_link_libraries(rtl_power_fftw ${FFTW3_LDFLAGS})
-endif()
 
 INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/rtl_power_fftw
   DESTINATION bin)

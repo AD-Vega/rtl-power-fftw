@@ -28,18 +28,7 @@
 #include <fftw3.h>
 
 using Buffer = std::vector<uint8_t>;
-
-#ifdef FLOAT_FFT
-using fft_datatype = float;
-using fftw_cdt = fftwf_complex;
-#define FFTW(name) fftwf_##name
-#else
-using fft_datatype = double;
-using fftw_cdt = fftw_complex;
-#define FFTW(name) fftw_##name
-#endif // FLOAT_FFT
-
-using complex = std::complex<fft_datatype>;
+using complex = std::complex<float>;
 
 class Datastore {
   public:
@@ -61,7 +50,7 @@ class Datastore {
     std::vector<float>& window_values;
 
     complex *inbuf, *outbuf;
-    FFTW(plan) plan;
+    fftwf_plan plan;
     std::vector<double> pwr;
 
     Datastore(int N, int buf_length, int64_t repeats, int buffers, bool window, std::vector<float>& window_values);
