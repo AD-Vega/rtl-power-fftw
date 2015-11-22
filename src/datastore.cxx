@@ -81,7 +81,7 @@ void Datastore::fftThread()
       if (fft_pointer == N) {
         fftwf_execute(plan);
         for (int i = 0; i < N; i++) {
-          pwr[i] += std::norm(outbuf[i]);
+          pwr[i] += pow(outbuf[i].real(), 2) + pow(outbuf[i].imag(), 2);
         }
         repeats_done++;
         fft_pointer = 0;
