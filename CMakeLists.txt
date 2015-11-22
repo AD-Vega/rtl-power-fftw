@@ -49,3 +49,6 @@ endif()
 
 INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/rtl_power_fftw
   DESTINATION bin)
+
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/doc/rtl_power_fftw.1
+  DESTINATION man/man1)
