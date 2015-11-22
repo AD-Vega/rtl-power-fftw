@@ -12,6 +12,16 @@ include_directories(
   ${RTLSDR_INCLUDE_DIRS}
 )
 
+# Check for 'long long int' to make TCLAP happy.
+include(CheckTypeSize)
+check_type_size("long long int" LONG_LONG BUILTIN_TYPES_ONLY)
+if(HAVE_LONG_LONG)
+  add_definitions(-DHAVE_LONG_LONG)
+else()
+  message(FATAL_ERROR
+    "${PROJECT_NAME} requires the 'long long int' type to compile!")
+endif()
+
 if(FLOAT_FFT)
   pkg_check_modules(FFTW3F REQUIRED fftw3f)
   include_directories(${FFTW3F_INCLUDE_DIRS})
