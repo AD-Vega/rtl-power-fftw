@@ -276,8 +276,8 @@ int main(int argc, char **argv)
   if (params.freq_hopping_isSet) {
     int hops = ceil(double(params.stopfreq - params.startfreq) / actual_samplerate);
     if (hops > 1) {
-      int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops + 1);
-      freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0 - overhang);
+      int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
+      freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0);
       //Mmmm, thirsty? waah-waaah...
       for (int hop = 1; hop < hops; hop++) {
         freqs_to_tune.push_back(freqs_to_tune.back() + actual_samplerate - overhang);
