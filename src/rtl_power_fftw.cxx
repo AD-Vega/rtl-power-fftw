@@ -166,8 +166,8 @@ int main(int argc, char **argv)
     else {
       std::cerr << "Error reading window function and baseline from stdin. Expected " << 2*N << " values, found "
                 << values.size() << "." << std::endl;
-      window = false;
-      baseline = false;
+      retval = ReturnValue::InvalidInput;
+      return (int)retval;
     }
   }
   // In other scenarios we can safely read window function and
@@ -193,8 +193,8 @@ int main(int argc, char **argv)
       else {
         std::cerr << "Error reading window function. Expected " << N << " values, found "
                   << window_values.size() << "." << std::endl;
-        std::cerr << "Ignoring window function data." << std::endl;
-        window = false;
+        retval = ReturnValue::InvalidInput;
+        return (int)retval;
       }
     }
     if (baseline) {
@@ -215,8 +215,8 @@ int main(int argc, char **argv)
       else {
         std::cerr << "Error reading baseline. Expected " << N << " values, found "
                   << baseline_values.size() << "." << std::endl;
-        std::cerr << "Ignoring baseline data." << std::endl;
-        baseline = false;
+        retval = ReturnValue::InvalidInput;
+        return (int)retval;
       }
     }
   }
