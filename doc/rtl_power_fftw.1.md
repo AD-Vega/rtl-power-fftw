@@ -11,9 +11,11 @@ rtl_power_fftw [`OPTION` ...]
 
 `rtl_power_fftw` reads the data stream from a RTL2832U device, performs the Fast Fourier transform on it, converts the frequency-domain data into a power spectrum and (usually, but not necessarily) averages a number of such spectra to gain a better signal-to-noise ratio. The program is capable of continuous real-time data acquisition and processing: it uses the rtl-sdr library to access the RTL2832U device and the FFTW library to do the FFT. Data acquisition and Fast Fourier transform are done in separate program threads for maximum efficiency. The resulting power spectrum is written to the standard output.
 
-Scans of wide frequency ranges are supported: if the range exceeds the device bandwidth, `rtl_power_fftw` can perform the measurement in multiple steps, changing the central frequency each time so that the desired frequency range is completely covered. See **FREQUENCY HOPPING** below for details.
+Scans of wide frequency ranges are supported: if the range exceeds the device bandwidth, `rtl_power_fftw` can perform the measurement in multiple steps, changing the central frequency each time so that the desired frequency range is completely covered. See **FREQUENCY SCANNING** below for details.
 
-The program accepts various options and switches that determine how the data from the RTL device is acquired and processed.
+The program can be stopped gracefully by sending the SIGINT signal to it (pressing Ctrl+C). If only one such signal is received, the program will finish the current frequency scan, write out the data and terminate. This is useful for quitting continuous acquisition mode (see `--continue`) as it ensures that the current scan is finished before the program stops. If two SIGINTs are received, the current acquisition will stop as soon as possible and no attempt will be done to finish the current scan (the data will still be written out, but some spectra might be missing from the last frequency scan). The third SIGINT will signal the operating system to terminate the program immediately.
+
+`rtl_power_fftw` accepts various options and switches that determine how the data from the RTL device is acquired and processed.
 
 
 # OPTIONS
@@ -85,7 +87,7 @@ Every spectrum that `rtl_power_fftw` writes to stdout is preceded by a few lines
 
 Data lines contain two columns: the frequency and the power spectral density. Note: the power values are expressed in logarithmic (dB) scale, but the reference power is not explicitly given. In particular, the numbers are **NOT** in dBm; they might be different for a different device and might also change (shift by a constant) in future versions of the program. In other words: don't assume anything. If you need absolute units, you have to calibrate your device against a known reference signal.
 
-If several measurements are to be done, the consecutive spectra will be divided by blank lines (see **FREQUENCY HOPPING** for details).
+If several measurements are to be done, the consecutive spectra will be divided by blank lines (see **FREQUENCY SCANNING** for details).
 
 
 # INTEGRATION TIME
@@ -95,7 +97,7 @@ The integration time specified with the `--time` option is usually considered to
 If you need the program to stop after a fixed time -- regardless of the actual number of samples collected -- use the `--strict-time` switch. Be warned, though, that only *acquisition* will be stopped after this time and it can take several more seconds for the FFT of the remaining data to be performed (this time overhead depends on the number of buffers used, see **BUFFERING** below).
 
 
-# FREQUENCY HOPPING
+# FREQUENCY SCANNING
 
 If the frequency span is too large to be contained within a single measurement (i.e., it exceeds the device bandwidth), `rtl_power_fftw` will divide it into several consecutive measurements.
 
