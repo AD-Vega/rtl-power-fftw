@@ -23,10 +23,24 @@ Scans of wide frequency ranges are supported: if the range exceeds the
 device bandwidth, \f[C]rtl_power_fftw\f[] can perform the measurement in
 multiple steps, changing the central frequency each time so that the
 desired frequency range is completely covered.
-See \f[B]FREQUENCY HOPPING\f[] below for details.
+See \f[B]FREQUENCY SCANNING\f[] below for details.
 .PP
-The program accepts various options and switches that determine how the
-data from the RTL device is acquired and processed.
+The program can be stopped gracefully by sending the SIGINT signal to it
+(pressing Ctrl+C).
+If only one such signal is received, the program will finish the current
+frequency scan, write out the data and terminate.
+This is useful for quitting continuous acquisition mode (see
+\f[C]\-\-continue\f[]) as it ensures that the current scan is finished
+before the program stops.
+If two SIGINTs are received, the current acquisition will stop as soon
+as possible and no attempt will be done to finish the current scan (the
+data will still be written out, but some spectra might be missing from
+the last frequency scan).
+The third SIGINT will signal the operating system to terminate the
+program immediately.
+.PP
+\f[C]rtl_power_fftw\f[] accepts various options and switches that
+determine how the data from the RTL device is acquired and processed.
 .SH OPTIONS
 .TP
 .B \f[C]\-B\f[] , \f[C]\-\-baseline\f[] 
@@ -162,7 +176,7 @@ If you need absolute units, you have to calibrate your device against a
 known reference signal.
 .PP
 If several measurements are to be done, the consecutive spectra will be
-divided by blank lines (see \f[B]FREQUENCY HOPPING\f[] for details).
+divided by blank lines (see \f[B]FREQUENCY SCANNING\f[] for details).
 .SH INTEGRATION TIME
 .PP
 The integration time specified with the \f[C]\-\-time\f[] option is
@@ -183,7 +197,7 @@ Be warned, though, that only \f[I]acquisition\f[] will be stopped after
 this time and it can take several more seconds for the FFT of the
 remaining data to be performed (this time overhead depends on the number
 of buffers used, see \f[B]BUFFERING\f[] below).
-.SH FREQUENCY HOPPING
+.SH FREQUENCY SCANNING
 .PP
 If the frequency span is too large to be contained within a single
 measurement (i.e., it exceeds the device bandwidth),

@@ -41,12 +41,6 @@
 #include "params.h"
 
 static rtlsdr_dev_t *dev = nullptr;
-std::atomic<bool> interrupted(false);
-
-// Signal handler that will get invoked on Ctrl+C
-void CtrlC_handler(int signal) {
-  interrupted = true;
-}
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 std::string currentDateTime() {
@@ -118,6 +112,47 @@ std::vector<T> read_inputfile(std::istream* stream) {
       values.push_back(value);
   }
   return values;
+}
+
+enum class InterruptState {
+  Neutral = 0,
+  FinishPass = 1,
+  FinishNow = 2
+};
+
+void CtrlC_handler(int signal);
+
+void set_CtrlC_handler(bool install) {
+  struct sigaction action;
+  action.sa_handler = (install ? &CtrlC_handler : SIG_DFL);
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+  sigaction(SIGINT, &action, nullptr);
+}
+
+std::atomic<int> interrupts(0);
+
+// Signal handler that will get invoked on Ctrl+C
+void CtrlC_handler(int signal) {
+  if (++interrupts == static_cast<int>(InterruptState::FinishNow))
+    set_CtrlC_handler(false);
+}
+
+bool checkInterrupt(InterruptState checkLevel) {
+  static int reportedInterrupts = 0;
+  const int currentInterrupts = interrupts;
+
+  while (reportedInterrupts < currentInterrupts) {
+    reportedInterrupts++;
+    auto state = static_cast<InterruptState>(reportedInterrupts);
+
+    if (state == InterruptState::FinishPass)
+      std::cerr << "Interrupted, will try to finish this pass." << std::endl;
+    else if (state == InterruptState::FinishNow)
+      std::cerr << "Interrupted, finishing now." << std::endl;
+  }
+
+  return currentInterrupts >= static_cast<int>(checkLevel);
 }
 
 
@@ -340,16 +375,8 @@ int main(int argc, char **argv)
   //Begin the work: prepare data buffers
   Datastore data(N, buf_length, repeats, params.buffers, params.window, window_values);
 
-  // Install signal handler for detecting a Ctrl+C. The signal handler will be
-  // configured to run only once - a second Ctrl+C will abort the program
-  // immediately.
-  struct sigaction action;
-  action.sa_handler = &CtrlC_handler;
-  sigset_t sigset;
-  sigemptyset(&sigset);
-  action.sa_mask = sigset;
-  action.sa_flags = SA_RESETHAND;
-  sigaction(SIGINT, &action, nullptr);
+  // Install a signal handler for detecting Ctrl+C.
+  set_CtrlC_handler(true);
 
   //Read from device and do FFT
   do {
@@ -428,9 +455,9 @@ int main(int argc, char **argv)
         if (params.strict_time && (steady_clock::now() >= stopTime))
           break;
 
-        // See if we have been interrupted with Ctrl+C.
-        if (interrupted)
-          break;
+        // See if we have been instructed to conclude this measurement immediately.
+        if (interrupts && checkInterrupt(InterruptState::FinishNow))
+            break;
       }
 
       // Record the end-of-acquisition timestamp.
@@ -487,8 +514,9 @@ int main(int argc, char **argv)
         std::cerr << size << " ";
       std::cerr << std::endl;
 
-      if (interrupted)
-        break;
+      // Check for interrupts.
+      if (interrupts && checkInterrupt(InterruptState::FinishPass))
+          break;
     }
     // Mark the end of a measurement set with another empty line.
     std::cout << std::endl;
