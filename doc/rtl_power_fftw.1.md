@@ -36,7 +36,7 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 :   RTL-SDR device index of the device used for the measurement.
 
 `-f` <Hz|Hz:Hz>,  `--freq` <Hz|Hz:Hz>
-:   Center frequency of the receiver or the frequency range to scan. A number can be followed by a `k`, `M` or `G` multiplier, meaning that the frequency is expressed in kilohertz, megahertz or gigahertz.
+:   Center frequency of the receiver or the frequency range to scan. A number can be followed by a `k`, `M` or `G` multiplier, meaning that the frequency is expressed in kilohertz, megahertz or gigahertz. Frequency range consists of lower and upper bound, separated with colon.
 
 `-g` <1/10th of dB>,  `--gain` <1/10th of dB>
 :   Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
@@ -154,6 +154,12 @@ For quick-and-dirty live monitoring, you can do:
        gnuplot
 
 In this pipeline, `sed` intervenes by replacing the header and separators written by `rtl_power_fftw` with inline commands for `gnuplot`.
+
+To scan frequencies between 100 MHz and 110 MHz and subtract baseline data from each scan, you could do:
+
+    rtl_power_fftw -f 100M:110M -B baseline_data.dat > spectrum.dat
+    
+This example also illustrates the fact that for all the options where it is possible, the program selects some safe default values and the options can be omitted. Although be noted that omiting the option to specify number of bins (`-b`) and relying on its default value while subtracting baseline is a discouraged practise. You should always specify `--bins` along with `--baseline`.
 
 
 ## AUTHORS
