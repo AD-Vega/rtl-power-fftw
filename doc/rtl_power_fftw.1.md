@@ -125,7 +125,7 @@ As long as the first number remains zero, you are fine - there was no data loss.
 
 On the contrary, if the first number is nonzero but is relatively small compared to the other numbers, it might simply mean that the available CPU power fluctuates heavily (e.g., if you have a fast processor but other CPU-intensive tasks are running at the same time). In such a case, you can try increasing the number of buffers with the `--buffers` option and see if that helps.
 
-Quote another scenario occurs if you have enough computing power but the memory is limited: in such a (rare) case, you might actually want to *reduce* the number of buffers.
+Another scenario occurs if you have enough computing power but the memory is limited: in such a (rare) case, you might actually want to *reduce* the number of buffers.
 
 The size (length) of the buffers is computed automatically to best match the requirements of the measurement. This is the recommended practice in most circumstances. However, if you feel that you have a very good reason to fiddle with the buffer size, you can do so with the `--buffer-size` option. But do keep in mind that the buffer size should be a multiple of 16384 (this is a requirement of the rtl-sdr library).
 
