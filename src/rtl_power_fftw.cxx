@@ -151,6 +151,7 @@ int main(int argc, char **argv)
   // spectra and gain considerable precision in this manner.
   if (window && baseline && params.window_file == "-" && params.baseline_file == "-") {
     stream = &std::cin;
+    std::cerr << "Reading baseline and window function from stdin." << std::endl;
     std::vector<double> values = read_inputfile<double>(stream);
     if ((int)values.size() == 2*N) {
       std::size_t const half_size = window_values.size() / 2;
@@ -179,10 +180,17 @@ int main(int argc, char **argv)
   else {
     if (window) {
       if (params.window_file == "-") {
+        std::cerr << "Reading window function from stdin." << std::endl;
         stream = &std::cin;
       }
       else {
+        std::cerr << "Reading window function from file " << params.baseline_file << std::endl;
         fs.open(params.window_file);
+        if (!fs.good()) {
+          std::cerr << "Could not open " << params.window_file << ". Quitting." << std::endl;
+          retval = ReturnValue::InvalidInput;
+          return (int)retval;
+        }
         stream = &fs;
       }
       window_values = read_inputfile<float>(stream);
@@ -205,6 +213,11 @@ int main(int argc, char **argv)
       else {
         std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
         fs.open(params.baseline_file);
+        if (!fs.good()) {
+          std::cerr << "Could not open " << params.baseline_file << ". Quitting." << std::endl;
+          retval = ReturnValue::InvalidInput;
+          return (int)retval;
+        }
         stream = &fs;
       }
       baseline_values = read_inputfile<double>(stream);
