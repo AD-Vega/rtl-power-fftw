@@ -242,8 +242,8 @@ If both the baseline and window function data are to be read from
 standard input, the baseline data is read first, followed by the window
 function data.
 .PP
-Window function points should have a value between 0 and 1, although
-this is not tested by the program.
+The program does not check the window function data in any way, apart
+from the requirement to have precisely enough data points.
 Window function is only read in single precision, due to FFT being done
 with floats, and there is no need to overcomplicate things.
 Single precision FFT is faster than double on at least some hardware and
