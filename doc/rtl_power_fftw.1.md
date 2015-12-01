@@ -44,6 +44,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-n` <repeats>,  `--repeats` <repeats>
 :   Number of spectra to average (incompatible with `-t`).
 
+`-o` <percent>,  `--overlap` <percent>
+:   Define lower boundary for overlap when frequency hopping (otherwise meaningless).
+
 `-p` <ppm>,  `--ppm` <ppm>
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
@@ -101,7 +104,7 @@ If you need the program to stop after a fixed time -- regardless of the actual n
 
 If the frequency span is too large to be contained within a single measurement (i.e., it exceeds the device bandwidth), `rtl_power_fftw` will divide it into several consecutive measurements.
 
-Of course, this raises a question: how to go about fitting several fixed-width (one device bandwidth) measurements into an arbitrary range? One could go for non-overlapping measurements, which yields data that is monotonously increasing in frequency, but then the whole scan might need to start *below* the lowest requested frequency, or end *above* the highest requested frequency, or even both. Even worse, these extended ranges could happen to contain frequencies not accepted by the device. Another approach is therefore used, namely to cover the requested frequency range exactly, but with overlapping measurements. Note that `rtl_power_fftw` will not make any presumptions on what to do with the overlaps: the overlapping spectra are simply written to the output and all further data treatment is up to the user.
+Of course, this raises a question: how to go about fitting several fixed-width (one device bandwidth) measurements into an arbitrary range? One could go for non-overlapping measurements, which yields data that is monotonously increasing in frequency, but then the whole scan might need to start *below* the lowest requested frequency, or end *above* the highest requested frequency, or even both. Even worse, these extended ranges could happen to contain frequencies not accepted by the device. Another approach is therefore used, namely to cover the requested frequency range exactly, but with overlapping measurements. Note that `rtl_power_fftw` will not make any presumptions on what to do with the overlaps: the overlapping spectra are simply written to the output and all further data treatment is up to the user. In case that your particular data treatment requires a certain minimum amount of overlap, you can use the option `--overlap` to set the desired lower bound for overlap in percentage of bandwidth.
 
 All spectra within one scan of the desired frequency range are separated in the output by a single blank line. After the whole frequency range has been scanned, an additional blank line is printed, so the measurement *sets* are separated by two blank lines in total. This output format is directly suitable as an input for `gnuplot`.
 

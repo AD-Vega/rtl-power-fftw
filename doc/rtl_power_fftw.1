@@ -92,6 +92,12 @@ Number of spectra to average (incompatible with \f[C]\-t\f[]).
 .RS
 .RE
 .TP
+.B \f[C]\-o\f[] , \f[C]\-\-overlap\f[] 
+Define lower boundary for overlap when frequency hopping (otherwise
+meaningless).
+.RS
+.RE
+.TP
 .B \f[C]\-p\f[] , \f[C]\-\-ppm\f[] 
 Correct for the oscillator error of RTL\-SDR device.
 The correction should be given in ppm.
@@ -219,6 +225,9 @@ frequency range exactly, but with overlapping measurements.
 Note that \f[C]rtl_power_fftw\f[] will not make any presumptions on what
 to do with the overlaps: the overlapping spectra are simply written to
 the output and all further data treatment is up to the user.
+In case that your particular data treatment requires a certain minimum
+amount of overlap, you can use the option \f[C]\-\-overlap\f[] to set
+the desired lower bound for overlap in percentage of bandwidth.
 .PP
 All spectra within one scan of the desired frequency range are separated
 in the output by a single blank line.
