@@ -250,7 +250,6 @@ ReturnValue Params::parse(int argc, char** argv) {
     window = arg_window.isSet();
     if (window)
       window_file = arg_window.getValue();
-
   }
   catch (TCLAP::ArgException &e) {
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
