@@ -197,7 +197,7 @@ ReturnValue Params::parse(int argc, char** argv) {
         }
         else {
           std::cerr << "Could not parse frequency range given to --freq: " 
-                    << opt 
+                    << opt.str()
                     << ". Expecting form startfreq:stopfreq. Exiting." 
                     << std::endl;
           return ReturnValue::InvalidArgument;
