@@ -322,7 +322,8 @@ int main(int argc, char **argv)
   //Frequency hopping
   //We're stuffing a vector full of frequencies that we wish to eventually tune to.
   if (params.freq_hopping_isSet) {
-    int hops = ceil(double(params.stopfreq - params.startfreq) / actual_samplerate);
+    double min_overhang = actual_samplerate*params.min_overlap/100;
+    int hops = ceil((double(params.stopfreq - params.startfreq) - min_overhang) / (double(actual_samplerate) - min_overhang));
     if (hops > 1) {
       int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
       freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0);

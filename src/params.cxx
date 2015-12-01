@@ -122,6 +122,8 @@ ReturnValue Params::parse(int argc, char** argv) {
     cmd.add( arg_rate );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
+    TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
+    cmd.add( arg_min_overlap );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
@@ -162,6 +164,7 @@ ReturnValue Params::parse(int argc, char** argv) {
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
     strict_time = arg_strict_time.getValue();
+    min_overlap = arg_min_overlap.getValue();
     //clipped_output_isSet = arg_clipped.getValue();
 
     // Due to USB specifics, buffer length for reading rtl_sdr device
@@ -247,6 +250,7 @@ ReturnValue Params::parse(int argc, char** argv) {
     window = arg_window.isSet();
     if (window)
       window_file = arg_window.getValue();
+
   }
   catch (TCLAP::ArgException &e) {
     std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
