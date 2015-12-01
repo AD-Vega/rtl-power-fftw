@@ -40,6 +40,7 @@ target_link_libraries(rtl_power_fftw
   ${FFTW3F_LDFLAGS}
   ${TCLAP_LDFLAGS}
   ${RTLSDR_LDFLAGS}
+  pthread
   m
 )
 
