@@ -20,50 +20,50 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 
 # OPTIONS
 
-`-B` <file|->,  `--baseline` <file|->
+`-B <file|->`,  `--baseline <file|->`
 :   Subtract baseline, read baseline data from a file or from standard input. See **BASELINE AND WINDOW FUNCTION DATA** below for format and further considerations.
 
-`-b` <bins in FFT spectrum>,  `--bins` <bins in FFT spectrum>
+`-b <bins in FFT spectrum>`,  `--bins <bins in FFT spectrum>`
 :    Number of bins in the FFT spectrum (must be an even number).
 
-`--buffers` <buffers>
+`--buffers <buffers>`
 :   Number of read buffers: don't touch unless running out of memory.
 
 `-c`,  `--continue`
 :   Repeat the same measurement endlessly. The spectra are written sequentially to the output and a header is appended before each measurement (as usual).
 
-`-d` <device index>,  `--device` <device index>
+`-d <device index>`,  `--device <device index>`
 :   RTL-SDR device index of the device used for the measurement.
 
-`-f` <Hz|Hz:Hz>,  `--freq` <Hz|Hz:Hz>
+`-f <Hz|Hz:Hz>`,  `--freq <Hz|Hz:Hz>`
 :   Center frequency of the receiver or the frequency range to scan. A number can be followed by a `k`, `M` or `G` multiplier, meaning that the frequency is expressed in kilohertz, megahertz or gigahertz. Frequency range consists of lower and upper bound, separated with colon.
 
-`-g` <1/10th of dB>,  `--gain` <1/10th of dB>
+`-g <1/10th of dB>`,  `--gain <1/10th of dB>`
 :   Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
 
-`-n` <repeats>,  `--repeats` <repeats>
+`-n <repeats>`,  `--repeats <repeats>`
 :   Number of spectra to average (incompatible with `-t`).
 
-`-o` <percent>,  `--overlap` <percent>
+`-o <percent>`,  `--overlap <percent>`
 :   Define lower boundary for overlap when frequency hopping (otherwise meaningless).
 
-`-p` <ppm>,  `--ppm` <ppm>
+`-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
-`-r` <Hz>,  `--rate` <Hz>
+`-r <Hz>`,  `--rate <Hz>`
 :   Sample rate of the receiver in Hz.
 
-`-s` <bytes>,  `--buffer-size` <bytes>
+`-s <bytes>`,  `--buffer-size <bytes>`
 :   Size of the read buffers (leave it as it is unless you know what you are doing).
 
 `-T`,  `--strict-time`
 :   End measurement when the time set with `--time` option is up, regardless
    of the number of gathered samples.
 
-`-t` <seconds>,  `--time` <seconds>
+`-t <seconds>`,  `--time <seconds>`
 :   Integration time (incompatible with -n). This is an _effective integration time_; see **INTEGRATION TIME** below for more info (in short, the measurement might take *longer* than that).
 
-`-w` <file|->,  `--window` <file|->
+`-w <file|->`,  `--window <file|->`
 :   Use a window function, read data from a file or from standard input. See **BASELINE AND WINDOW FUNCTION DATA** below for format and further considerations.
 
 `--`,  `--ignore_rest`

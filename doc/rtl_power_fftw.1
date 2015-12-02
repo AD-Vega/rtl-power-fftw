@@ -43,7 +43,7 @@ program immediately.
 determine how the data from the RTL device is acquired and processed.
 .SH OPTIONS
 .TP
-.B \f[C]\-B\f[] , \f[C]\-\-baseline\f[] 
+.B \f[C]\-B\ <file|\->\f[], \f[C]\-\-baseline\ <file|\->\f[]
 Subtract baseline, read baseline data from a file or from standard
 input.
 See \f[B]BASELINE AND WINDOW FUNCTION DATA\f[] below for format and
@@ -51,12 +51,12 @@ further considerations.
 .RS
 .RE
 .TP
-.B \f[C]\-b\f[] , \f[C]\-\-bins\f[] 
+.B \f[C]\-b\ <bins\ in\ FFT\ spectrum>\f[], \f[C]\-\-bins\ <bins\ in\ FFT\ spectrum>\f[]
 Number of bins in the FFT spectrum (must be an even number).
 .RS
 .RE
 .TP
-.B \f[C]\-\-buffers\f[] 
+.B \f[C]\-\-buffers\ <buffers>\f[]
 Number of read buffers: don\[aq]t touch unless running out of memory.
 .RS
 .RE
@@ -68,12 +68,12 @@ appended before each measurement (as usual).
 .RS
 .RE
 .TP
-.B \f[C]\-d\f[] , \f[C]\-\-device\f[] 
+.B \f[C]\-d\ <device\ index>\f[], \f[C]\-\-device\ <device\ index>\f[]
 RTL\-SDR device index of the device used for the measurement.
 .RS
 .RE
 .TP
-.B \f[C]\-f\f[] , \f[C]\-\-freq\f[] 
+.B \f[C]\-f\ <Hz|Hz:Hz>\f[], \f[C]\-\-freq\ <Hz|Hz:Hz>\f[]
 Center frequency of the receiver or the frequency range to scan.
 A number can be followed by a \f[C]k\f[], \f[C]M\f[] or \f[C]G\f[]
 multiplier, meaning that the frequency is expressed in kilohertz,
@@ -82,34 +82,34 @@ Frequency range consists of lower and upper bound, separated with colon.
 .RS
 .RE
 .TP
-.B \f[C]\-g\f[] <1/10th of dB>, \f[C]\-\-gain\f[] <1/10th of dB>
+.B \f[C]\-g\ <1/10th\ of\ dB>\f[], \f[C]\-\-gain\ <1/10th\ of\ dB>\f[]
 Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
 .RS
 .RE
 .TP
-.B \f[C]\-n\f[] , \f[C]\-\-repeats\f[] 
+.B \f[C]\-n\ <repeats>\f[], \f[C]\-\-repeats\ <repeats>\f[]
 Number of spectra to average (incompatible with \f[C]\-t\f[]).
 .RS
 .RE
 .TP
-.B \f[C]\-o\f[] , \f[C]\-\-overlap\f[] 
+.B \f[C]\-o\ <percent>\f[], \f[C]\-\-overlap\ <percent>\f[]
 Define lower boundary for overlap when frequency hopping (otherwise
 meaningless).
 .RS
 .RE
 .TP
-.B \f[C]\-p\f[] , \f[C]\-\-ppm\f[] 
+.B \f[C]\-p\ <ppm>\f[], \f[C]\-\-ppm\ <ppm>\f[]
 Correct for the oscillator error of RTL\-SDR device.
 The correction should be given in ppm.
 .RS
 .RE
 .TP
-.B \f[C]\-r\f[] , \f[C]\-\-rate\f[] 
+.B \f[C]\-r\ <Hz>\f[], \f[C]\-\-rate\ <Hz>\f[]
 Sample rate of the receiver in Hz.
 .RS
 .RE
 .TP
-.B \f[C]\-s\f[] , \f[C]\-\-buffer\-size\f[] 
+.B \f[C]\-s\ <bytes>\f[], \f[C]\-\-buffer\-size\ <bytes>\f[]
 Size of the read buffers (leave it as it is unless you know what you are
 doing).
 .RS
@@ -121,7 +121,7 @@ regardless of the number of gathered samples.
 .RS
 .RE
 .TP
-.B \f[C]\-t\f[] , \f[C]\-\-time\f[] 
+.B \f[C]\-t\ <seconds>\f[], \f[C]\-\-time\ <seconds>\f[]
 Integration time (incompatible with \-n).
 This is an \f[I]effective integration time\f[]; see \f[B]INTEGRATION
 TIME\f[] below for more info (in short, the measurement might take
@@ -129,7 +129,7 @@ TIME\f[] below for more info (in short, the measurement might take
 .RS
 .RE
 .TP
-.B \f[C]\-w\f[] , \f[C]\-\-window\f[] 
+.B \f[C]\-w\ <file|\->\f[], \f[C]\-\-window\ <file|\->\f[]
 Use a window function, read data from a file or from standard input.
 See \f[B]BASELINE AND WINDOW FUNCTION DATA\f[] below for format and
 further considerations.
