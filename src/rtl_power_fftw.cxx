@@ -339,37 +339,24 @@ int main(int argc, char **argv)
   else {
     freqs_to_tune.push_back(params.cfreq);
   }
-  //Adjust buffer length in case of small sample batches.
   if (!params.buf_length_isSet) {
     int64_t base_buf_multiplier = ceil((2.0 * N * repeats) / base_buf);
-    // Optimisation works like this: if we need to sample less than ~1.6MB, 
-    // make the buffer the smallest possible optimized size that fits all
-    // the data.
-    // If it is longer, but not long enough to make it irrelevant how full
-    // the last buffer is, try to optimize buffer size so that it should fit better,
-    // but without overcomplicating the estimation.
-    // If you know what should fit your purposes well, feel free to override this
-    // simply by assigning buffer length yourself.
+    // If less than approximately 1.6 MB of data is needed, make the buffer the
+    // smallest possible while still keeping the size to a multiple of
+    // base_buf. Otherwise, set it to 100 * base_buf.
+    // If you know what should fit your purposes well, feel free to use the
+    // command line options to override this.
     if (base_buf_multiplier <= default_buf_multiplier) {
       buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
     }
-    else if (base_buf_multiplier <= default_buf_multiplier*default_buf_multiplier) {
-      buf_length = base_buf * ceil(sqrt(base_buf_multiplier));
-    }
-    else {
-      // Keep default length.
-    }
   }
-
-  int64_t readouts = ceil((2.0 * N * repeats) / buf_length);
 
   //Print info on capture time and associated specifics.
   std::cerr << "Number of bins: " << N << std::endl;
   std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
   std::cerr << "Buffer length: " << buf_length << std::endl;
-  std::cerr << "Number of device readouts: " << readouts << std::endl;
   std::cerr << "Number of averaged spectra: " << repeats << std::endl;
-  std::cerr << "Estimated time of measurements: " << readouts*0.5*(double)buf_length/actual_samplerate << " seconds" << std::endl;
+  std::cerr << "Estimated time of measurements: " << (double)N * repeats / actual_samplerate << " seconds" << std::endl;
   if (params.strict_time)
     std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
 
@@ -420,10 +407,12 @@ int main(int argc, char **argv)
 
       std::unique_lock<std::mutex>
         status_lock(data.status_mutex, std::defer_lock);
+      int64_t dataTotal = 2 * N * repeats;
+      int64_t dataRead = 0;
       int64_t deviceReadouts = 0;
       int64_t successfulReadouts = 0;
 
-      while (successfulReadouts < readouts) {
+      while (dataRead < dataTotal) {
         // Wait until a buffer is empty
         status_lock.lock();
         data.queue_histogram[data.empty_buffers.size()]++;
@@ -434,6 +423,23 @@ int main(int argc, char **argv)
         data.empty_buffers.pop_front();
         status_lock.unlock();
 
+        // Figure out how much data to read.
+        int64_t dataNeeded = dataTotal - dataRead;
+        if (dataNeeded >= buf_length)
+          // More than one bufferful of data needed. Leave the rest for later.
+          dataNeeded = buf_length;
+        else {
+          // Less than one whole buffer needed. Round the number of (real)
+          // samples upwards to the next multiple of base_buf.
+          dataNeeded = base_buf * ceil((double)dataNeeded / base_buf);
+          if (dataNeeded > buf_length) {
+            // Nope, too much. We'll still have to do this in two readouts.
+            dataNeeded = buf_length;
+          }
+        }
+        // Resize the buffer to match the needed amount of data.
+        buffer.resize(dataNeeded);
+
         rtl_retval = read_rtlsdr(buffer);
         deviceReadouts++;
 
@@ -441,12 +447,15 @@ int main(int argc, char **argv)
           std::cerr << "Error: dropped samples." << std::endl;
           // There is effectively no data in this buffer - consider it empty.
           status_lock.lock();
-          data.empty_buffers.push_back(&buffer);
+          // Push the buffer to the front of the queue because it already has
+          // the correct size and we'll just pop it again on next iteration.
+          data.empty_buffers.push_front(&buffer);
           status_lock.unlock();
           // No need to notify the worker thread in this case.
         }
         else {
           successfulReadouts++;
+          dataRead += dataNeeded;
           status_lock.lock();
           data.occupied_buffers.push_back(&buffer);
           data.status_change.notify_all();
