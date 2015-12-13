@@ -516,11 +516,15 @@ int main(int argc, char **argv)
       std::cerr << std::endl;
 
       // Check for interrupts.
-      if (interrupts && checkInterrupt(InterruptState::FinishPass))
+      if (interrupts && checkInterrupt(InterruptState::FinishNow))
           break;
     }
     // Mark the end of a measurement set with another empty line.
     std::cout << std::endl;
+
+    // Check for interrupts.
+    if (interrupts && checkInterrupt(InterruptState::FinishPass))
+        break;
   } while (params.endless);
 
   rtlsdr_close(dev);
