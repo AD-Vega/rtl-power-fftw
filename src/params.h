@@ -39,9 +39,9 @@ public:
   int N = 512;
   int dev_index = 0;
   int gain = 372;
-  int cfreq = 1420405752;
-  int startfreq = 0; 
-  int stopfreq = 0;
+  long long int cfreq = 1420405752;
+  long long int startfreq = 0; 
+  long long int stopfreq = 0;
   int sample_rate = 2000000;
   double integration_time = 0;
   bool integration_time_isSet = false;
