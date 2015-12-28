@@ -502,7 +502,7 @@ int main(int argc, char **argv)
       // Calculate the precision needed for displaying the frequency.
       const int extraDigitsFreq = 2;
       const int significantPlacesFreq =
-        ceil(floor(log10(params.cfreq)) - log10(actual_samplerate/N) + 1 + extraDigitsFreq);
+        ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/N) + 1 + extraDigitsFreq);
       const int significantPlacesPwr = 6;
 
       for (int i = 0; i < N; i++) {
