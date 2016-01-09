@@ -546,8 +546,16 @@ int main(int argc, char **argv)
     // Check for interrupts.
     if (interrupts && checkInterrupt(InterruptState::FinishPass))
         break;
-  } while (params.endless);
+  } while (params.endless && freqs_to_tune.size());
 
   rtlsdr_close(dev);
-  return 0;
+
+  if (freqs_to_tune.size() == 0) {
+    // No valid frequencies were left. This is certainly not OK.
+    return (int)ReturnValue::AcquisitionError;
+  }
+  else {
+    // Normal termination.
+    return 0;
+  }
 }

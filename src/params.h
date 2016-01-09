@@ -28,7 +28,8 @@ enum class ReturnValue {
   InvalidDeviceIndex = 2,
   InvalidArgument = 3,
   TCLAPerror = 4,
-  InvalidInput = 5
+  InvalidInput = 5,
+  AcquisitionError = 6
 };
 
 const int base_buf = 16384;
