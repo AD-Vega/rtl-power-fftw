@@ -370,7 +370,19 @@ int main(int argc, char **argv)
   do {
     for (auto iter = freqs_to_tune.begin(); iter != freqs_to_tune.end();) {
       // Set center frequency.
-      rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)*iter);
+      // There have been accounts of hardware being stubborn and refusing to
+      // tune to the desired frequency on random occasions despite being able
+      // to tune to that same frequency at other times. Such hiccups seem to
+      // be rare. We handle them by a naive and stupid, but seemingly effective
+      // method of persuasion.
+      const int max_tune_tries = 3;
+      for (int tune_try = 0, rtl_retval = -1;
+           tune_try < max_tune_tries && rtl_retval != 0;
+           tune_try++)
+      {
+        std::cerr << "Tuning to " << *iter << " Hz (try " << tune_try + 1 << ")" << std::endl;
+        rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)*iter);
+      }
       int tuned_freq = rtlsdr_get_center_freq(dev);
       // This sleeping is inherited from other code. There have been hints of strange
       // behaviour if it was commented out, so we left it in. If you actually know
