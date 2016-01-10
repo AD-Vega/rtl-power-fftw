@@ -156,6 +156,102 @@ bool checkInterrupt(InterruptState checkLevel) {
 }
 
 
+ReturnValue read_window_and_baseline_data(
+  const Params& params,
+  std::vector<double>& baseline_values,
+  std::vector<float>& window_values)
+{
+  std::istream* stream;
+  std::ifstream fs;
+  // Window function and baseline correction
+  // If both are read from stdin, we read it all in one go,
+  // and see if the total number of values adds up to what we need.
+  // If so, the first half is window data, and the other half is
+  // baseline data. Window data are floats, as our samples are only
+  // 8-bit anyway, but baseline is double, as we can average a lot of
+  // spectra and gain considerable precision in this manner.
+  if (params.window && params.baseline && params.window_file == "-" && params.baseline_file == "-") {
+    stream = &std::cin;
+    std::cerr << "Reading baseline and window function from stdin." << std::endl;
+    std::vector<double> values = read_inputfile<double>(stream);
+    if ((int)values.size() == 2*params.N) {
+      std::size_t const half_size = window_values.size() / 2;
+      for (std::size_t i=0; i < values.size(); i++) {
+        if ( i < half_size )
+          window_values.push_back((float)values[i]);
+        else
+          baseline_values.push_back(values[i]);
+      }
+      std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
+      std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+    }
+    else {
+      std::cerr << "Error reading window function and baseline from stdin. Expected "
+                << 2 * params.N << " values, found " << values.size() << "." << std::endl;
+      return ReturnValue::InvalidInput;
+    }
+  }
+  // In other scenarios we can safely read window function and
+  // baseline data separately, as there is certainly no clash
+  // on stdin anymore. The reason why we don't read all the data
+  // separately in all cases is the ease with which we test for unsuitable input
+  // data (too many points) if we read all of it and see if there is
+  // just enough data points.
+  else {
+    if (params.window) {
+      if (params.window_file == "-") {
+        std::cerr << "Reading window function from stdin." << std::endl;
+        stream = &std::cin;
+      }
+      else {
+        std::cerr << "Reading window function from file " << params.baseline_file << std::endl;
+        fs.open(params.window_file);
+        if (!fs.good()) {
+          std::cerr << "Could not open " << params.window_file << ". Quitting." << std::endl;
+          return ReturnValue::InvalidInput;
+        }
+        stream = &fs;
+      }
+      window_values = read_inputfile<float>(stream);
+      // Check for suitability.
+      if ((int)window_values.size() == params.N) {
+        std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
+      }
+      else {
+        std::cerr << "Error reading window function. Expected " << params.N << " values, found "
+                  << window_values.size() << "." << std::endl;
+        return ReturnValue::InvalidInput;
+      }
+    }
+    if (params.baseline) {
+      if (params.baseline_file == "-") {
+        std::cerr << "Reading baseline from stdin." << std::endl;
+        stream = &std::cin;
+      }
+      else {
+        std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
+        fs.open(params.baseline_file);
+        if (!fs.good()) {
+          std::cerr << "Could not open " << params.baseline_file << ". Quitting." << std::endl;
+          return ReturnValue::InvalidInput;
+        }
+        stream = &fs;
+      }
+      baseline_values = read_inputfile<double>(stream);
+      // Check for suitability.
+      if ((int)baseline_values.size() == params.N) {
+        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+      }
+      else {
+        std::cerr << "Error reading baseline. Expected " << params.N << " values, found "
+                  << baseline_values.size() << "." << std::endl;
+        return ReturnValue::InvalidInput;
+      }
+    }
+  }
+  return ReturnValue::Success;
+}
+
 int main(int argc, char **argv)
 {
   int rtl_retval;
@@ -172,102 +268,11 @@ int main(int argc, char **argv)
   int& N = params.N;
   int& buf_length = params.buf_length;
   bool& baseline = params.baseline;
-  bool& window = params.window;
   int64_t& repeats = params.repeats;
 
-  std::istream* stream;
-  std::ifstream fs;
-  // Window function and baseline correction
-  // If both are read from stdin, we read it all in one go,
-  // and see if the total number of values adds up to what we need.
-  // If so, the first half is window data, and the other half is
-  // baseline data. Window data are floats, as our samples are only
-  // 8-bit anyway, but baseline is double, as we can average a lot of
-  // spectra and gain considerable precision in this manner.
-  if (window && baseline && params.window_file == "-" && params.baseline_file == "-") {
-    stream = &std::cin;
-    std::cerr << "Reading baseline and window function from stdin." << std::endl;
-    std::vector<double> values = read_inputfile<double>(stream);
-    if ((int)values.size() == 2*N) {
-      std::size_t const half_size = window_values.size() / 2;
-      for (std::size_t i=0; i < values.size(); i++) {
-        if ( i < half_size )
-          window_values.push_back((float)values[i]);
-        else
-          baseline_values.push_back(values[i]);
-      }
-      std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
-      std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
-    }
-    else {
-      std::cerr << "Error reading window function and baseline from stdin. Expected " << 2*N << " values, found "
-                << values.size() << "." << std::endl;
-      retval = ReturnValue::InvalidInput;
-      return (int)retval;
-    }
-  }
-  // In other scenarios we can safely read window function and
-  // baseline data separately, as there is certainly no clash
-  // on stdin anymore. The reason why we don't read all the data
-  // separately in all cases is the ease with which we test for unsuitable input
-  // data (too many points) if we read all of it and see if there is
-  // just enough data points.
-  else {
-    if (window) {
-      if (params.window_file == "-") {
-        std::cerr << "Reading window function from stdin." << std::endl;
-        stream = &std::cin;
-      }
-      else {
-        std::cerr << "Reading window function from file " << params.baseline_file << std::endl;
-        fs.open(params.window_file);
-        if (!fs.good()) {
-          std::cerr << "Could not open " << params.window_file << ". Quitting." << std::endl;
-          retval = ReturnValue::InvalidInput;
-          return (int)retval;
-        }
-        stream = &fs;
-      }
-      window_values = read_inputfile<float>(stream);
-      // Check for suitability.
-      if ((int)window_values.size() == N) {
-        std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
-      }
-      else {
-        std::cerr << "Error reading window function. Expected " << N << " values, found "
-                  << window_values.size() << "." << std::endl;
-        retval = ReturnValue::InvalidInput;
-        return (int)retval;
-      }
-    }
-    if (baseline) {
-      if (params.baseline_file == "-") {
-        std::cerr << "Reading baseline from stdin." << std::endl;
-        stream = &std::cin;
-      }
-      else {
-        std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
-        fs.open(params.baseline_file);
-        if (!fs.good()) {
-          std::cerr << "Could not open " << params.baseline_file << ". Quitting." << std::endl;
-          retval = ReturnValue::InvalidInput;
-          return (int)retval;
-        }
-        stream = &fs;
-      }
-      baseline_values = read_inputfile<double>(stream);
-      // Check for suitability.
-      if ((int)baseline_values.size() == N) {
-        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
-      }
-      else {
-        std::cerr << "Error reading baseline. Expected " << N << " values, found "
-                  << baseline_values.size() << "." << std::endl;
-        retval = ReturnValue::InvalidInput;
-        return (int)retval;
-      }
-    }
-  }
+  retval = read_window_and_baseline_data(params, baseline_values, window_values);
+  if (retval != ReturnValue::Success)
+    return (int)retval;
 
   //Sanity checks
   //RTLSDR Device
