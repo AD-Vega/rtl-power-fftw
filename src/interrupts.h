@@ -17,33 +17,21 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef EXCEPTIONS_H
-#define EXCEPTIONS_H
+#ifndef INTERRUPTS_H
+#define INTERRUPTS_H
 
-#include <stdexcept>
+#include <atomic>
 
-enum class ReturnValue {
-  Success = 0,
-  NoDeviceFound = 1,
-  InvalidDeviceIndex = 2,
-  InvalidArgument = 3,
-  TCLAPerror = 4,
-  InvalidInput = 5,
-  AcquisitionError = 6,
-  HardwareError = 7
+enum class InterruptState {
+  Neutral = 0,
+  FinishPass = 1,
+  FinishNow = 2
 };
 
-// A multi-purpose exception used in rtl_power_fftw. It carries along an error
-// message and a ReturnValue enum that will be eventually converted to an integer
-// and used as a return value of the program.
-class RPFexception : public std::runtime_error {
-public:
-    explicit RPFexception(const std::string& what, ReturnValue retval_) :
-      runtime_error(what), retval(retval_) {}
-    ReturnValue returnValue() const { return retval; }
+extern std::atomic<int> interrupts;
 
-private:
-  ReturnValue retval;
-};
+void CtrlC_handler(int signal);
+void set_CtrlC_handler(bool install);
+bool checkInterrupt(InterruptState checkLevel);
 
-#endif // EXCEPTIONS_H
+#endif // INTERRUPTS_H

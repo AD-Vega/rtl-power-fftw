@@ -27,14 +27,14 @@
 #include <vector>
 #include <fftw3.h>
 
+#include "params.h"
+
 using Buffer = std::vector<uint8_t>;
 using complex = std::complex<float>;
 
 class Datastore {
   public:
-    int N;
-    int buffers;
-    int64_t repeats;
+    const Params& params;
     int64_t repeats_done = 0;
 
     std::mutex status_mutex;
@@ -46,14 +46,13 @@ class Datastore {
     std::condition_variable status_change;
     std::vector<int> queue_histogram;
 
-    bool window;
     std::vector<float>& window_values;
 
     complex *inbuf, *outbuf;
     fftwf_plan plan;
     std::vector<double> pwr;
 
-    Datastore(int N, int buf_length, int64_t repeats, int buffers, bool window, std::vector<float>& window_values);
+    Datastore(const Params& params, std::vector<float>& window_values);
     ~Datastore();
 
     // Delete these so we don't accidentally mess anything up by copying
@@ -65,6 +64,7 @@ class Datastore {
 
     // This function will be started in a separate thread.
     void fftThread();
+    void printQueueHistogram() const;
 };
 
 #endif // DATASTORE_H

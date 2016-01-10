@@ -17,33 +17,40 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef EXCEPTIONS_H
-#define EXCEPTIONS_H
+#ifndef RTL_H
+#define RTL_H
 
-#include <stdexcept>
+#include <vector>
+#include <rtl-sdr.h>
 
-enum class ReturnValue {
-  Success = 0,
-  NoDeviceFound = 1,
-  InvalidDeviceIndex = 2,
-  InvalidArgument = 3,
-  TCLAPerror = 4,
-  InvalidInput = 5,
-  AcquisitionError = 6,
-  HardwareError = 7
-};
+#include "datastore.h"
 
-// A multi-purpose exception used in rtl_power_fftw. It carries along an error
-// message and a ReturnValue enum that will be eventually converted to an integer
-// and used as a return value of the program.
-class RPFexception : public std::runtime_error {
+class Rtlsdr {
 public:
-    explicit RPFexception(const std::string& what, ReturnValue retval_) :
-      runtime_error(what), retval(retval_) {}
-    ReturnValue returnValue() const { return retval; }
+  Rtlsdr(int dev_index);
+  ~Rtlsdr();
+  // Rtlsdr objects cannot be copied; they can be moved, though.
+  Rtlsdr(const Rtlsdr&) = delete;
+  Rtlsdr& operator=(const Rtlsdr&) = delete;
+
+  // Reading parameters & data.
+  std::vector<int> gains() const;
+  uint32_t sample_rate() const;
+  uint32_t frequency() const ;
+  bool read(Buffer& buffer) const;
+
+  // Parameter setting.
+  void set_gain(int gain);
+  void set_frequency(uint32_t frequency);
+  void set_freq_correction(int ppm_error);
+  void set_sample_rate(uint32_t sample_rate);
+
+  // Convenience functions.
+  int nearest_gain(int gain) const;
+  void print_gains() const;
 
 private:
-  ReturnValue retval;
+  rtlsdr_dev_t *dev;
 };
 
-#endif // EXCEPTIONS_H
+#endif // RTL_H

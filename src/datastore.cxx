@@ -17,19 +17,19 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <iostream>
 #include "datastore.h"
 
-Datastore::Datastore(int N_, int buf_length, int64_t repeats_, int buffers_, bool window_, std::vector<float>& window_values_) :
-  N(N_), buffers(buffers_), repeats(repeats_),
-  queue_histogram(buffers_+1, 0), window(window_),
-  window_values(window_values_), pwr(N)
+Datastore::Datastore(const Params& params_, std::vector<float>& window_values_) :
+  params(params_), queue_histogram(params.buffers+1, 0),
+  window_values(window_values_), pwr(params.N)
 {
-  for (int i = 0; i < buffers; i++)
-    empty_buffers.push_back(new Buffer(buf_length));
+  for (int i = 0; i < params.buffers; i++)
+    empty_buffers.push_back(new Buffer(params.buf_length));
 
-  inbuf = (complex*)fftwf_alloc_complex(N);
-  outbuf = (complex*)fftwf_alloc_complex(N);
-  plan = fftwf_plan_dft_1d(N, (fftwf_complex*)inbuf, (fftwf_complex*)outbuf,
+  inbuf = (complex*)fftwf_alloc_complex(params.N);
+  outbuf = (complex*)fftwf_alloc_complex(params.N);
+  plan = fftwf_plan_dft_1d(params.N, (fftwf_complex*)inbuf, (fftwf_complex*)outbuf,
                           FFTW_FORWARD, FFTW_MEASURE);
 }
 
@@ -64,8 +64,8 @@ void Datastore::fftThread()
     status_lock.unlock();
     //A neat new loop to avoid having to have data buffer aligned with fft buffer.
     unsigned int buffer_pointer = 0;
-    while (buffer_pointer < buffer.size() && repeats_done < repeats ) {
-      while (fft_pointer < N && buffer_pointer < buffer.size()) {
+    while (buffer_pointer < buffer.size() && repeats_done < params.repeats ) {
+      while (fft_pointer < params.N && buffer_pointer < buffer.size()) {
         //The magic aligment happens here: we have to change the phase of each next complex sample
         //by pi - this means that even numbered samples stay the same while odd numbered samples
         //get multiplied by -1 (thus rotated by pi in complex plane).
@@ -73,14 +73,14 @@ void Datastore::fftThread()
         const float multiplier = (fft_pointer % 2 == 0 ? 1 : -1);
         complex bfr_val(buffer[buffer_pointer], buffer[buffer_pointer+1]);
         inbuf[fft_pointer] = (bfr_val - complex(127.0, 127.0)) * multiplier;
-        if (window)
+        if (params.window)
           inbuf[fft_pointer] *= window_values[fft_pointer];
         buffer_pointer += 2;
         fft_pointer++;
       }
-      if (fft_pointer == N) {
+      if (fft_pointer == params.N) {
         fftwf_execute(plan);
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < params.N; i++) {
           pwr[i] += pow(outbuf[i].real(), 2) + pow(outbuf[i].imag(), 2);
         }
         repeats_done++;
@@ -93,4 +93,11 @@ void Datastore::fftThread()
     status_change.notify_all();
     status_lock.unlock();
   }
+}
+
+void Datastore::printQueueHistogram() const {
+  std::cerr << "Buffer queue histogram: ";
+  for (auto size : queue_histogram)
+    std::cerr << size << " ";
+  std::cerr << std::endl;
 }
