@@ -258,309 +258,314 @@ int main(int argc, char **argv)
   std::vector<double> baseline_values;
   std::vector<float> window_values;
   std::list<int> freqs_to_tune;
+  ReturnValue final_retval = ReturnValue::Success;
 
-  Params params;
-  ReturnValue retval = params.parse(argc, argv);
-  if (retval != ReturnValue::Success)
-    return (int)retval;
+  try {
+    Params params;
+    ReturnValue retval = params.parse(argc, argv);
+    if (retval != ReturnValue::Success)
+      return (int)retval;
 
-  // Convenient shortened names.
-  int& N = params.N;
-  int& buf_length = params.buf_length;
-  bool& baseline = params.baseline;
-  int64_t& repeats = params.repeats;
+    // Convenient shortened names.
+    int& N = params.N;
+    int& buf_length = params.buf_length;
+    bool& baseline = params.baseline;
+    int64_t& repeats = params.repeats;
 
-  retval = read_window_and_baseline_data(params, baseline_values, window_values);
-  if (retval != ReturnValue::Success)
-    return (int)retval;
+    retval = read_window_and_baseline_data(params, baseline_values, window_values);
+    if (retval != ReturnValue::Success)
+      return (int)retval;
 
-  //Sanity checks
-  //RTLSDR Device
-  int num_of_rtls = rtlsdr_get_device_count();
-  if (num_of_rtls == 0) {
-    std::cerr << "Error: no RTL-SDR compatible devices found. Exiting." << std::endl;
-    return (int)ReturnValue::NoDeviceFound;
-  }
-  if (params.dev_index >= num_of_rtls) {
-    std::cerr << "Error: invalid device number. Only "<< num_of_rtls << " devices available. Exiting." << std::endl;
-    return (int)ReturnValue::InvalidDeviceIndex;
-  }
-  rtl_retval = rtlsdr_open(&dev, (uint32_t)params.dev_index);
-  if (rtl_retval < 0 ) {
-    std::cerr << "Could not open rtl_sdr device " << params.dev_index << "." << std::endl;
-    return rtl_retval;
-  }
+    //Sanity checks
+    //RTLSDR Device
+    int num_of_rtls = rtlsdr_get_device_count();
+    if (num_of_rtls == 0) {
+      std::cerr << "Error: no RTL-SDR compatible devices found. Exiting." << std::endl;
+      return (int)ReturnValue::NoDeviceFound;
+    }
+    if (params.dev_index >= num_of_rtls) {
+      std::cerr << "Error: invalid device number. Only "<< num_of_rtls << " devices available. Exiting." << std::endl;
+      return (int)ReturnValue::InvalidDeviceIndex;
+    }
+    rtl_retval = rtlsdr_open(&dev, (uint32_t)params.dev_index);
+    if (rtl_retval < 0 ) {
+      std::cerr << "Could not open rtl_sdr device " << params.dev_index << "." << std::endl;
+      return rtl_retval;
+    }
 
-  //Available gains
-  int number_of_gains = rtlsdr_get_tuner_gains(dev, nullptr);
-  std::vector<int> gain_table(number_of_gains);
-  rtlsdr_get_tuner_gains(dev, gain_table.data());
-  print_gain_table(gain_table);
-  int gain = select_nearest_gain(params.gain, gain_table);
-  std::cerr << "Selected nearest available gain: " << gain
-            << " (" << 0.1*gain << " dB)" << std::endl;
-  rtlsdr_set_tuner_gain_mode(dev, 1);
-  rtlsdr_set_tuner_gain(dev, gain);
+    //Available gains
+    int number_of_gains = rtlsdr_get_tuner_gains(dev, nullptr);
+    std::vector<int> gain_table(number_of_gains);
+    rtlsdr_get_tuner_gains(dev, gain_table.data());
+    print_gain_table(gain_table);
+    int gain = select_nearest_gain(params.gain, gain_table);
+    std::cerr << "Selected nearest available gain: " << gain
+              << " (" << 0.1*gain << " dB)" << std::endl;
+    rtlsdr_set_tuner_gain_mode(dev, 1);
+    rtlsdr_set_tuner_gain(dev, gain);
 
-  // Temporarily set the frequency to params.cfreq, just so that the device does not
-  // complain upon setting the sample rate.
-  rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)params.cfreq);
-  std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    // Temporarily set the frequency to params.cfreq, just so that the device does not
+    // complain upon setting the sample rate.
+    rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)params.cfreq);
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-  //Frequency correction
-  if (params.ppm_error != 0) {
-    rtl_retval = rtlsdr_set_freq_correction(dev, params.ppm_error);
-    if (rtl_retval < 0)
-      std::cerr << "Unable to set PPM error in rtl_sdr device." << std::endl;
-    else
-      std::cerr << "PPM error set to: "<< params.ppm_error << std::endl;
-  }
+    //Frequency correction
+    if (params.ppm_error != 0) {
+      rtl_retval = rtlsdr_set_freq_correction(dev, params.ppm_error);
+      if (rtl_retval < 0)
+        std::cerr << "Unable to set PPM error in rtl_sdr device." << std::endl;
+      else
+        std::cerr << "PPM error set to: "<< params.ppm_error << std::endl;
+    }
 
-  //Sample rate
-  rtlsdr_set_sample_rate(dev, (uint32_t)params.sample_rate);
-  int actual_samplerate = rtlsdr_get_sample_rate(dev);
-  std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
-  //It is only fair to calculate repeats with actual samplerate, not our wishes.
-  if (params.integration_time_isSet)
-    repeats = ceil(actual_samplerate * params.integration_time / N);
+    //Sample rate
+    rtlsdr_set_sample_rate(dev, (uint32_t)params.sample_rate);
+    int actual_samplerate = rtlsdr_get_sample_rate(dev);
+    std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
+    //It is only fair to calculate repeats with actual samplerate, not our wishes.
+    if (params.integration_time_isSet)
+      repeats = ceil(actual_samplerate * params.integration_time / N);
 
-  //Frequency hopping
-  //We're stuffing a vector full of frequencies that we wish to eventually tune to.
-  if (params.freq_hopping_isSet) {
-    double min_overhang = actual_samplerate*params.min_overlap/100;
-    int hops = ceil((double(params.stopfreq - params.startfreq) - min_overhang) / (double(actual_samplerate) - min_overhang));
-    if (hops > 1) {
-      int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
-      freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0);
-      //Mmmm, thirsty? waah-waaah...
-      for (int hop = 1; hop < hops; hop++) {
-        freqs_to_tune.push_back(freqs_to_tune.back() + actual_samplerate - overhang);
+    //Frequency hopping
+    //We're stuffing a vector full of frequencies that we wish to eventually tune to.
+    if (params.freq_hopping_isSet) {
+      double min_overhang = actual_samplerate*params.min_overlap/100;
+      int hops = ceil((double(params.stopfreq - params.startfreq) - min_overhang) / (double(actual_samplerate) - min_overhang));
+      if (hops > 1) {
+        int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
+        freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0);
+        //Mmmm, thirsty? waah-waaah...
+        for (int hop = 1; hop < hops; hop++) {
+          freqs_to_tune.push_back(freqs_to_tune.back() + actual_samplerate - overhang);
+        }
+      }
+      else
+        freqs_to_tune.push_back((params.startfreq + params.stopfreq)/2);
+    }
+    // If there is only one hop, no problem.
+    else {
+      freqs_to_tune.push_back(params.cfreq);
+    }
+    if (!params.buf_length_isSet) {
+      int64_t base_buf_multiplier = ceil((2.0 * N * repeats) / base_buf);
+      // If less than approximately 1.6 MB of data is needed, make the buffer the
+      // smallest possible while still keeping the size to a multiple of
+      // base_buf. Otherwise, set it to 100 * base_buf.
+      // If you know what should fit your purposes well, feel free to use the
+      // command line options to override this.
+      if (base_buf_multiplier <= default_buf_multiplier) {
+        buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
       }
     }
-    else
-      freqs_to_tune.push_back((params.startfreq + params.stopfreq)/2);
-  }
-  // If there is only one hop, no problem.
-  else {
-    freqs_to_tune.push_back(params.cfreq);
-  }
-  if (!params.buf_length_isSet) {
-    int64_t base_buf_multiplier = ceil((2.0 * N * repeats) / base_buf);
-    // If less than approximately 1.6 MB of data is needed, make the buffer the
-    // smallest possible while still keeping the size to a multiple of
-    // base_buf. Otherwise, set it to 100 * base_buf.
-    // If you know what should fit your purposes well, feel free to use the
-    // command line options to override this.
-    if (base_buf_multiplier <= default_buf_multiplier) {
-      buf_length = base_buf * ((base_buf_multiplier == 0 ) ? 1 : base_buf_multiplier);
-    }
-  }
 
-  //Print info on capture time and associated specifics.
-  std::cerr << "Number of bins: " << N << std::endl;
-  std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
-  std::cerr << "Buffer length: " << buf_length << std::endl;
-  std::cerr << "Number of averaged spectra: " << repeats << std::endl;
-  std::cerr << "Estimated time of measurements: " << (double)N * repeats / actual_samplerate << " seconds" << std::endl;
-  if (params.strict_time)
-    std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
+    //Print info on capture time and associated specifics.
+    std::cerr << "Number of bins: " << N << std::endl;
+    std::cerr << "Total number of (complex) samples to collect: " << (int64_t)N*repeats << std::endl;
+    std::cerr << "Buffer length: " << buf_length << std::endl;
+    std::cerr << "Number of averaged spectra: " << repeats << std::endl;
+    std::cerr << "Estimated time of measurements: " << (double)N * repeats / actual_samplerate << " seconds" << std::endl;
+    if (params.strict_time)
+      std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
 
-  //Begin the work: prepare data buffers
-  Datastore data(N, buf_length, repeats, params.buffers, params.window, window_values);
+    //Begin the work: prepare data buffers
+    Datastore data(N, buf_length, repeats, params.buffers, params.window, window_values);
 
-  // Install a signal handler for detecting Ctrl+C.
-  set_CtrlC_handler(true);
+    // Install a signal handler for detecting Ctrl+C.
+    set_CtrlC_handler(true);
 
-  //Read from device and do FFT
-  do {
-    for (auto iter = freqs_to_tune.begin(); iter != freqs_to_tune.end();) {
-      // Set center frequency.
-      // There have been accounts of hardware being stubborn and refusing to
-      // tune to the desired frequency on random occasions despite being able
-      // to tune to that same frequency at other times. Such hiccups seem to
-      // be rare. We handle them by a naive and stupid, but seemingly effective
-      // method of persuasion.
-      const int max_tune_tries = 3;
-      for (int tune_try = 0, rtl_retval = -1;
-           tune_try < max_tune_tries && rtl_retval != 0;
-           tune_try++)
-      {
-        std::cerr << "Tuning to " << *iter << " Hz (try " << tune_try + 1 << ")" << std::endl;
-        rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)*iter);
-      }
-      int tuned_freq = rtlsdr_get_center_freq(dev);
-      // This sleeping is inherited from other code. There have been hints of strange
-      // behaviour if it was commented out, so we left it in. If you actually know
-      // why this would be necessary (or, to the contrary, that it is complete
-      // bullshit), you are most welcome to explain it here!
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    //Read from device and do FFT
+    do {
+      for (auto iter = freqs_to_tune.begin(); iter != freqs_to_tune.end();) {
+        // Set center frequency.
+        // There have been accounts of hardware being stubborn and refusing to
+        // tune to the desired frequency on random occasions despite being able
+        // to tune to that same frequency at other times. Such hiccups seem to
+        // be rare. We handle them by a naive and stupid, but seemingly effective
+        // method of persuasion.
+        const int max_tune_tries = 3;
+        for (int tune_try = 0, rtl_retval = -1;
+            tune_try < max_tune_tries && rtl_retval != 0;
+            tune_try++)
+        {
+          std::cerr << "Tuning to " << *iter << " Hz (try " << tune_try + 1 << ")" << std::endl;
+          rtl_retval = rtlsdr_set_center_freq(dev, (uint32_t)*iter);
+        }
+        int tuned_freq = rtlsdr_get_center_freq(dev);
+        // This sleeping is inherited from other code. There have been hints of strange
+        // behaviour if it was commented out, so we left it in. If you actually know
+        // why this would be necessary (or, to the contrary, that it is complete
+        // bullshit), you are most welcome to explain it here!
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
 
-      // Check if the frequency was actually successfully set.
-      if ( rtl_retval < 0 || tuned_freq == 0 ) {
-        //Warning: librtlsdr does not tell you of all cases when tuner cannot lock PLL, despite clearly writing so to the stderr!
-        //TODO: Fix librtlsdr.
-        std::cerr << "Unable to tune to " << *iter << ". Dropping from frequency list." << std::endl;
-        iter = freqs_to_tune.erase(iter);
-        continue;
-      }
-      else {
-        ++iter;
-      }
-
-      std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
-      std::fill(data.pwr.begin(), data.pwr.end(), 0);
-      data.acquisition_finished = false;
-      data.repeats_done = 0;
-
-      std::thread t(&Datastore::fftThread, std::ref(data));
-
-      // Record the start-of-acquisition timestamp.
-      std::string startAcqTimestamp = currentDateTime();
-      std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
-
-      // Calculate the stop time. This will only be effective if --strict-time was given.
-      using steady_clock = std::chrono::steady_clock;
-      steady_clock::time_point stopTime = steady_clock::now() + std::chrono::milliseconds(int64_t(params.integration_time*1000));
-
-      std::unique_lock<std::mutex>
-        status_lock(data.status_mutex, std::defer_lock);
-      int64_t dataTotal = 2 * N * repeats;
-      int64_t dataRead = 0;
-      int64_t deviceReadouts = 0;
-      int64_t successfulReadouts = 0;
-
-      while (dataRead < dataTotal) {
-        // Wait until a buffer is empty
-        status_lock.lock();
-        data.queue_histogram[data.empty_buffers.size()]++;
-        while (data.empty_buffers.empty())
-          data.status_change.wait(status_lock);
-
-        Buffer& buffer(*data.empty_buffers.front());
-        data.empty_buffers.pop_front();
-        status_lock.unlock();
-
-        // Figure out how much data to read.
-        int64_t dataNeeded = dataTotal - dataRead;
-        if (dataNeeded >= buf_length)
-          // More than one bufferful of data needed. Leave the rest for later.
-          dataNeeded = buf_length;
+        // Check if the frequency was actually successfully set.
+        if ( rtl_retval < 0 || tuned_freq == 0 ) {
+          //Warning: librtlsdr does not tell you of all cases when tuner cannot lock PLL, despite clearly writing so to the stderr!
+          //TODO: Fix librtlsdr.
+          std::cerr << "Unable to tune to " << *iter << ". Dropping from frequency list." << std::endl;
+          iter = freqs_to_tune.erase(iter);
+          continue;
+        }
         else {
-          // Less than one whole buffer needed. Round the number of (real)
-          // samples upwards to the next multiple of base_buf.
-          dataNeeded = base_buf * ceil((double)dataNeeded / base_buf);
-          if (dataNeeded > buf_length) {
-            // Nope, too much. We'll still have to do this in two readouts.
+          ++iter;
+        }
+
+        std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
+        std::fill(data.pwr.begin(), data.pwr.end(), 0);
+        data.acquisition_finished = false;
+        data.repeats_done = 0;
+
+        std::thread t(&Datastore::fftThread, std::ref(data));
+
+        // Record the start-of-acquisition timestamp.
+        std::string startAcqTimestamp = currentDateTime();
+        std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+
+        // Calculate the stop time. This will only be effective if --strict-time was given.
+        using steady_clock = std::chrono::steady_clock;
+        steady_clock::time_point stopTime = steady_clock::now() + std::chrono::milliseconds(int64_t(params.integration_time*1000));
+
+        std::unique_lock<std::mutex>
+          status_lock(data.status_mutex, std::defer_lock);
+        int64_t dataTotal = 2 * N * repeats;
+        int64_t dataRead = 0;
+        int64_t deviceReadouts = 0;
+        int64_t successfulReadouts = 0;
+
+        while (dataRead < dataTotal) {
+          // Wait until a buffer is empty
+          status_lock.lock();
+          data.queue_histogram[data.empty_buffers.size()]++;
+          while (data.empty_buffers.empty())
+            data.status_change.wait(status_lock);
+
+          Buffer& buffer(*data.empty_buffers.front());
+          data.empty_buffers.pop_front();
+          status_lock.unlock();
+
+          // Figure out how much data to read.
+          int64_t dataNeeded = dataTotal - dataRead;
+          if (dataNeeded >= buf_length)
+            // More than one bufferful of data needed. Leave the rest for later.
             dataNeeded = buf_length;
+          else {
+            // Less than one whole buffer needed. Round the number of (real)
+            // samples upwards to the next multiple of base_buf.
+            dataNeeded = base_buf * ceil((double)dataNeeded / base_buf);
+            if (dataNeeded > buf_length) {
+              // Nope, too much. We'll still have to do this in two readouts.
+              dataNeeded = buf_length;
+            }
           }
+          // Resize the buffer to match the needed amount of data.
+          buffer.resize(dataNeeded);
+
+          rtl_retval = read_rtlsdr(buffer);
+          deviceReadouts++;
+
+          if (rtl_retval) {
+            std::cerr << "Error: dropped samples." << std::endl;
+            // There is effectively no data in this buffer - consider it empty.
+            status_lock.lock();
+            // Push the buffer to the front of the queue because it already has
+            // the correct size and we'll just pop it again on next iteration.
+            data.empty_buffers.push_front(&buffer);
+            status_lock.unlock();
+            // No need to notify the worker thread in this case.
+          }
+          else {
+            successfulReadouts++;
+            dataRead += dataNeeded;
+            status_lock.lock();
+            data.occupied_buffers.push_back(&buffer);
+            data.status_change.notify_all();
+            status_lock.unlock();
+          }
+
+          if (params.strict_time && (steady_clock::now() >= stopTime))
+            break;
+
+          // See if we have been instructed to conclude this measurement immediately.
+          if (interrupts && checkInterrupt(InterruptState::FinishNow))
+              break;
         }
-        // Resize the buffer to match the needed amount of data.
-        buffer.resize(dataNeeded);
 
-        rtl_retval = read_rtlsdr(buffer);
-        deviceReadouts++;
+        // Record the end-of-acquisition timestamp.
+        std::string endAcqTimestamp = currentDateTime();
+        std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
-        if (rtl_retval) {
-          std::cerr << "Error: dropped samples." << std::endl;
-          // There is effectively no data in this buffer - consider it empty.
-          status_lock.lock();
-          // Push the buffer to the front of the queue because it already has
-          // the correct size and we'll just pop it again on next iteration.
-          data.empty_buffers.push_front(&buffer);
-          status_lock.unlock();
-          // No need to notify the worker thread in this case.
+        status_lock.lock();
+        data.acquisition_finished = true;
+        data.status_change.notify_all();
+        status_lock.unlock();
+        t.join();
+
+        // Print a summary.
+        std::cerr << "Actual number of (complex) samples collected: "
+          << (int64_t)N * data.repeats_done << std::endl;
+        std::cerr << "Actual number of device readouts: " << deviceReadouts << std::endl;
+        std::cerr << "Number of successful readouts: " << successfulReadouts << std::endl;
+        std::cerr << "Actual number of averaged spectra: " << data.repeats_done << std::endl;
+        std::cerr << "Effective integration time: " <<
+          (double)N * data.repeats_done / actual_samplerate << " seconds" << std::endl;
+
+        //Write out data.
+        std::cout << "# rtl-power-fftw output" << std::endl;
+        std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
+        std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
+        std::cout << "#" << std::endl;
+        std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+
+        //Interpolate the central point, to cancel DC bias.
+        data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
+
+        // Calculate the precision needed for displaying the frequency.
+        const int extraDigitsFreq = 2;
+        const int significantPlacesFreq =
+          ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/N) + 1 + extraDigitsFreq);
+        const int significantPlacesPwr = 6;
+
+        for (int i = 0; i < N; i++) {
+          double freq = tuned_freq + (i - N/2.0) * actual_samplerate / N;
+          double pwrdb = 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate) - (baseline ? baseline_values[i] : 0);
+          std::cout << std::setprecision(significantPlacesFreq)
+                    << freq
+                    << " "
+                    << std::setprecision(significantPlacesPwr)
+                    << pwrdb
+                    << std::endl;
         }
-        else {
-          successfulReadouts++;
-          dataRead += dataNeeded;
-          status_lock.lock();
-          data.occupied_buffers.push_back(&buffer);
-          data.status_change.notify_all();
-          status_lock.unlock();
-        }
+        // Separate consecutive spectra with empty lines.
+        std::cout << std::endl;
+        std::cout.flush();
 
-        if (params.strict_time && (steady_clock::now() >= stopTime))
-          break;
+        std::cerr << "Buffer queue histogram: ";
+        for (auto size : data.queue_histogram)
+          std::cerr << size << " ";
+        std::cerr << std::endl;
 
-        // See if we have been instructed to conclude this measurement immediately.
+        // Check for interrupts.
         if (interrupts && checkInterrupt(InterruptState::FinishNow))
             break;
       }
-
-      // Record the end-of-acquisition timestamp.
-      std::string endAcqTimestamp = currentDateTime();
-      std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
-
-      status_lock.lock();
-      data.acquisition_finished = true;
-      data.status_change.notify_all();
-      status_lock.unlock();
-      t.join();
-
-      // Print a summary.
-      std::cerr << "Actual number of (complex) samples collected: "
-        << (int64_t)N * data.repeats_done << std::endl;
-      std::cerr << "Actual number of device readouts: " << deviceReadouts << std::endl;
-      std::cerr << "Number of successful readouts: " << successfulReadouts << std::endl;
-      std::cerr << "Actual number of averaged spectra: " << data.repeats_done << std::endl;
-      std::cerr << "Effective integration time: " <<
-        (double)N * data.repeats_done / actual_samplerate << " seconds" << std::endl;
-
-      //Write out data.
-      std::cout << "# rtl-power-fftw output" << std::endl;
-      std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
-      std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
-      std::cout << "#" << std::endl;
-      std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-
-      //Interpolate the central point, to cancel DC bias.
-      data.pwr[data.N/2] = (data.pwr[data.N/2 - 1] + data.pwr[data.N/2+1]) / 2;
-
-      // Calculate the precision needed for displaying the frequency.
-      const int extraDigitsFreq = 2;
-      const int significantPlacesFreq =
-        ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/N) + 1 + extraDigitsFreq);
-      const int significantPlacesPwr = 6;
-
-      for (int i = 0; i < N; i++) {
-        double freq = tuned_freq + (i - N/2.0) * actual_samplerate / N;
-        double pwrdb = 10*log10(data.pwr[i] / data.repeats_done / N / actual_samplerate) - (baseline ? baseline_values[i] : 0);
-        std::cout << std::setprecision(significantPlacesFreq)
-                  << freq
-                  << " "
-                  << std::setprecision(significantPlacesPwr)
-                  << pwrdb
-                  << std::endl;
-      }
-      // Separate consecutive spectra with empty lines.
+      // Mark the end of a measurement set with another empty line.
       std::cout << std::endl;
-      std::cout.flush();
-
-      std::cerr << "Buffer queue histogram: ";
-      for (auto size : data.queue_histogram)
-        std::cerr << size << " ";
-      std::cerr << std::endl;
 
       // Check for interrupts.
-      if (interrupts && checkInterrupt(InterruptState::FinishNow))
+      if (interrupts && checkInterrupt(InterruptState::FinishPass))
           break;
+    } while (params.endless && freqs_to_tune.size());
+
+    rtlsdr_close(dev);
+
+    if (freqs_to_tune.size() == 0) {
+      // No valid frequencies were left. This is certainly not OK.
+      throw RPFexception("No valid frequencies left.", ReturnValue::AcquisitionError);
     }
-    // Mark the end of a measurement set with another empty line.
-    std::cout << std::endl;
-
-    // Check for interrupts.
-    if (interrupts && checkInterrupt(InterruptState::FinishPass))
-        break;
-  } while (params.endless && freqs_to_tune.size());
-
-  rtlsdr_close(dev);
-
-  if (freqs_to_tune.size() == 0) {
-    // No valid frequencies were left. This is certainly not OK.
-    return (int)ReturnValue::AcquisitionError;
   }
-  else {
-    // Normal termination.
-    return 0;
+  catch (RPFexception &exception) {
+    std::cerr << exception.what() << std::endl;
+    final_retval = exception.returnValue();
   }
+
+  return (int)final_retval;
 }

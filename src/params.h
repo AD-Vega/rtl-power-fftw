@@ -21,16 +21,7 @@
 #define PARAMS_H
 
 #include <string>
-
-enum class ReturnValue {
-  Success = 0,
-  NoDeviceFound = 1,
-  InvalidDeviceIndex = 2,
-  InvalidArgument = 3,
-  TCLAPerror = 4,
-  InvalidInput = 5,
-  AcquisitionError = 6
-};
+#include "exceptions.h"
 
 const int base_buf = 16384;
 const int default_buf_multiplier = 100;
