@@ -20,10 +20,10 @@
 #include <iostream>
 #include <list>
 #include <string>
-#include <sstream>
 #include <tclap/CmdLine.h>
 
 #include "params.h"
+#include "exceptions.h"
 
 int parse_frequency(std::string s) {
   std::istringstream ss(s);
@@ -86,26 +86,18 @@ double parse_time(std::string s) {
   }
 }
 
-class NegativeArgException {
-public:
-  NegativeArgException(std::string msg_) : msg(msg_) {}
-  std::string what() const { return msg; }
-private:
-  std::string msg;
-};
-
 template <typename T>
 void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
   for (auto arg : list) {
     if (arg->isSet() && arg->getValue() < 0) {
-      std::ostringstream message;
-      message << "Argument to '" << arg->getName() << "' must be a positive number.";
-      throw NegativeArgException(message.str());
+      throw RPFexception(
+        "Argument to '"  + arg->getName() + "' must be a positive number.",
+        ReturnValue::InvalidArgument);
     }
   }
 }
 
-ReturnValue Params::parse(int argc, char** argv) {
+Params::Params(int argc, char** argv) {
   try {
     TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "1.0-beta1");
     TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
@@ -141,15 +133,9 @@ ReturnValue Params::parse(int argc, char** argv) {
 
     cmd.parse(argc, argv);
 
-    try {
-      // Ain't this C++11 f**** magic? Watch this:
-      ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_gain, &arg_index, &arg_buffers, &arg_bufferlen});
-      ensure_positive_arg<int64_t>({&arg_repeats});
-    }
-    catch (NegativeArgException& e) {
-      std::cerr << e.what() << std::endl;
-      return ReturnValue::InvalidArgument;
-    }
+    // Ain't this C++11 f**** magic? Watch this:
+    ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_gain, &arg_index, &arg_buffers, &arg_bufferlen});
+    ensure_positive_arg<int64_t>({&arg_repeats});
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
@@ -187,11 +173,10 @@ ReturnValue Params::parse(int argc, char** argv) {
           startfreq = parse_frequency(startFreqString);
           stopfreq = parse_frequency(stopFreqString);
           if (startfreq < 0 || stopfreq < 0 || stopfreq < startfreq) {
-            std::cerr << "Invalid frequency range given to --freq: " 
-                    << startfreq << ":" << stopfreq << ". "
-                    << "Expecting positive numbers in ascending order, allowing the k,M,G multipliers. Exiting."
-                    << std::endl;
-            return ReturnValue::InvalidArgument;
+            throw RPFexception(
+              "Invalid frequency range given to --freq: " + a_freq + ".\n"
+              + "Expecting positive numbers in ascending order, allowing the k,M,G multipliers. Exiting.",
+              ReturnValue::InvalidArgument);
           }
           else {
             freq_hopping_isSet = true;
@@ -199,21 +184,19 @@ ReturnValue Params::parse(int argc, char** argv) {
           }
         }
         else {
-          std::cerr << "Could not parse frequency range given to --freq: " 
-                    << opt.str()
-                    << ". Expecting form startfreq:stopfreq. Exiting." 
-                    << std::endl;
-          return ReturnValue::InvalidArgument;
+          throw RPFexception(
+            "Could not parse frequency range given to --freq: " + a_freq + ".\n"
+            + "Expecting form startfreq:stopfreq. Exiting.",
+            ReturnValue::InvalidArgument);
         }
       }
       else {
         cfreq = parse_frequency(a_freq);
         if (cfreq < 0) {
-          std::cerr << "Invalid frequency given to --freq: " 
-                    << cfreq
-                    << ". Expecting a positive number, allowing the k,M,G multipliers. Exiting."
-                    << std::endl;
-          return ReturnValue::InvalidArgument;
+          throw RPFexception(
+            "Invalid frequency given to --freq: " + std::to_string(cfreq) + ".\n"
+            + "Expecting a positive number, allowing the k,M,G multipliers. Exiting.",
+            ReturnValue::InvalidArgument);
         }
       }
     }
@@ -224,17 +207,17 @@ ReturnValue Params::parse(int argc, char** argv) {
     if (arg_integration_time.isSet()) {
       integration_time = parse_time(arg_integration_time.getValue());
       if (integration_time <= 0) {
-        std::cerr << "Could not parse the value given to --time. "
-                  << "Expecting format [WdXhYm]Z[s]. Exiting."
-                  << std::endl;
-        return ReturnValue::InvalidArgument;
+        throw RPFexception(
+          "Could not parse the value given to --time. Expecting format [WdXhYm]Z[s]. Exiting.",
+          ReturnValue::InvalidArgument);
       }
       integration_time_isSet = true;
     }
     //Integration time
     if (arg_integration_time.isSet() + arg_repeats.isSet() > 1) {
-      std::cerr << "Options -n and -t are mutually exclusive. Exiting." << std::endl;
-      return ReturnValue::InvalidArgument;
+      throw RPFexception(
+        "Options -n and -t are mutually exclusive. Exiting.",
+        ReturnValue::InvalidArgument);
     }
     if (arg_strict_time.isSet() && !arg_integration_time.isSet()) {
       std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
@@ -252,9 +235,8 @@ ReturnValue Params::parse(int argc, char** argv) {
       window_file = arg_window.getValue();
   }
   catch (TCLAP::ArgException &e) {
-    std::cerr << "error: " << e.error() << " for arg " << e.argId() << std::endl;
-    return ReturnValue::TCLAPerror;
+    throw RPFexception(
+      "Error: " + e.error() + " for arg " + e.argId(),
+      ReturnValue::TCLAPerror);
   }
-
-  return ReturnValue::Success;
 }

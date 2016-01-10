@@ -28,6 +28,8 @@ const int default_buf_multiplier = 100;
 
 class Params {
 public:
+  Params(int argc, char **argv);
+
   int N = 512;
   int dev_index = 0;
   int gain = 372;
@@ -51,9 +53,6 @@ public:
   bool freq_hopping_isSet = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
-
-public:
-  ReturnValue parse(int argc, char **argv);
 };
 
 #endif // PARAMS_H

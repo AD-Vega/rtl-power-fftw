@@ -156,7 +156,7 @@ bool checkInterrupt(InterruptState checkLevel) {
 }
 
 
-ReturnValue read_window_and_baseline_data(
+void read_window_and_baseline_data(
   const Params& params,
   std::vector<double>& baseline_values,
   std::vector<float>& window_values)
@@ -186,9 +186,11 @@ ReturnValue read_window_and_baseline_data(
       std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
     }
     else {
-      std::cerr << "Error reading window function and baseline from stdin. Expected "
-                << 2 * params.N << " values, found " << values.size() << "." << std::endl;
-      return ReturnValue::InvalidInput;
+      throw RPFexception(
+        "Error reading window function and baseline from stdin. Expected "
+        + std::to_string(2 * params.N) + " values, found "
+        + std::to_string(values.size()) + ".",
+      ReturnValue::InvalidInput);
     }
   }
   // In other scenarios we can safely read window function and
@@ -207,8 +209,9 @@ ReturnValue read_window_and_baseline_data(
         std::cerr << "Reading window function from file " << params.baseline_file << std::endl;
         fs.open(params.window_file);
         if (!fs.good()) {
-          std::cerr << "Could not open " << params.window_file << ". Quitting." << std::endl;
-          return ReturnValue::InvalidInput;
+          throw RPFexception(
+            "Could not open " + params.window_file + ". Quitting.",
+            ReturnValue::InvalidInput);
         }
         stream = &fs;
       }
@@ -218,9 +221,10 @@ ReturnValue read_window_and_baseline_data(
         std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
       }
       else {
-        std::cerr << "Error reading window function. Expected " << params.N << " values, found "
-                  << window_values.size() << "." << std::endl;
-        return ReturnValue::InvalidInput;
+        throw RPFexception(
+          "Error reading window function. Expected " + std::to_string(params.N)
+          + " values, found " + std::to_string(window_values.size()) + ".",
+          ReturnValue::InvalidInput);
       }
     }
     if (params.baseline) {
@@ -232,8 +236,9 @@ ReturnValue read_window_and_baseline_data(
         std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
         fs.open(params.baseline_file);
         if (!fs.good()) {
-          std::cerr << "Could not open " << params.baseline_file << ". Quitting." << std::endl;
-          return ReturnValue::InvalidInput;
+          throw RPFexception(
+            "Could not open " + params.baseline_file + ". Quitting.",
+            ReturnValue::InvalidInput);
         }
         stream = &fs;
       }
@@ -243,13 +248,13 @@ ReturnValue read_window_and_baseline_data(
         std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
       }
       else {
-        std::cerr << "Error reading baseline. Expected " << params.N << " values, found "
-                  << baseline_values.size() << "." << std::endl;
-        return ReturnValue::InvalidInput;
+        throw RPFexception(
+          "Error reading baseline. Expected " + std::to_string(params.N)
+          + " values, found " + std::to_string(baseline_values.size()) + ".",
+          ReturnValue::InvalidInput);
       }
     }
   }
-  return ReturnValue::Success;
 }
 
 int main(int argc, char **argv)
@@ -261,10 +266,7 @@ int main(int argc, char **argv)
   ReturnValue final_retval = ReturnValue::Success;
 
   try {
-    Params params;
-    ReturnValue retval = params.parse(argc, argv);
-    if (retval != ReturnValue::Success)
-      return (int)retval;
+    Params params(argc, argv);
 
     // Convenient shortened names.
     int& N = params.N;
@@ -272,20 +274,21 @@ int main(int argc, char **argv)
     bool& baseline = params.baseline;
     int64_t& repeats = params.repeats;
 
-    retval = read_window_and_baseline_data(params, baseline_values, window_values);
-    if (retval != ReturnValue::Success)
-      return (int)retval;
+    read_window_and_baseline_data(params, baseline_values, window_values);
 
     //Sanity checks
     //RTLSDR Device
     int num_of_rtls = rtlsdr_get_device_count();
     if (num_of_rtls == 0) {
-      std::cerr << "Error: no RTL-SDR compatible devices found. Exiting." << std::endl;
-      return (int)ReturnValue::NoDeviceFound;
+      throw RPFexception(
+        "Error: no RTL-SDR compatible devices found. Exiting.",
+        ReturnValue::NoDeviceFound);
     }
     if (params.dev_index >= num_of_rtls) {
-      std::cerr << "Error: invalid device number. Only "<< num_of_rtls << " devices available. Exiting." << std::endl;
-      return (int)ReturnValue::InvalidDeviceIndex;
+      throw RPFexception(
+        "Error: invalid device number. Only " + std::to_string(num_of_rtls)
+        + " devices available. Exiting.",
+        ReturnValue::InvalidDeviceIndex);
     }
     rtl_retval = rtlsdr_open(&dev, (uint32_t)params.dev_index);
     if (rtl_retval < 0 ) {
