@@ -233,14 +233,15 @@ void Acquisition::run() {
     std::cerr << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")" << std::endl;
     try {
       rtldev.set_frequency(freq);
-      success = true;
+      tuned_freq = rtldev.frequency();
+      if (tuned_freq != 0)
+        success = true;
     }
     catch (RPFexception) {}
   }
-  tuned_freq = rtldev.frequency();
 
   // Check if the frequency was actually successfully set.
-  if ( !success || tuned_freq == 0 ) {
+  if (!success) {
     //Warning: librtlsdr does not tell you of all cases when tuner cannot lock PLL, despite clearly writing so to the stderr!
     //TODO: Fix librtlsdr.
     throw TuneError(freq);
