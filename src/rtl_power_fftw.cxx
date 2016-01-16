@@ -48,8 +48,13 @@ int main(int argc, char **argv)
     rtldev.set_gain(gain);
 
     // Temporarily set the frequency to params.cfreq, just so that the device does not
-    // complain upon setting the sample rate.
-    rtldev.set_frequency(params.cfreq);
+    // complain upon setting the sample rate. If this fails, it's not a big deal:
+    // the sample rate will be read out just fine, but librtlsdr _might_ print an
+    // error message to stderr.
+    try {
+      rtldev.set_frequency(params.cfreq);
+    }
+    catch (RPFexception&) {}
 
     // Set frequency correction
     if (params.ppm_error != 0) {
