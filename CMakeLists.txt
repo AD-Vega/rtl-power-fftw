@@ -32,10 +32,11 @@ endif(NOT CMAKE_BUILD_TYPE)
 
 add_executable(rtl_power_fftw
   src/acquisition.cxx
-  src/datastore.cxx
+  src/dispatcher.cxx
   src/device.cxx
   src/interrupts.cxx
   src/params.cxx
+  src/fft_worker.cxx
   src/rtl_power_fftw.cxx
 )
 

@@ -20,7 +20,7 @@
 #include <rtl-sdr.h>
 
 #include "acquisition.h"
-#include "datastore.h"
+#include "dispatcher.h"
 #include "device.h"
 #include "exceptions.h"
 #include "interrupts.h"
@@ -74,8 +74,7 @@ int main(int argc, char **argv)
     // Print info on capture time and associated specifics.
     plan.print();
 
-    //Begin the work: prepare data buffers
-    Datastore data(params, auxData.window_values);
+    Dispatcher dispatcher(params, auxData, 4);
 
     // Install a signal handler for detecting Ctrl+C.
     set_CtrlC_handler(true);
@@ -84,7 +83,7 @@ int main(int argc, char **argv)
     do {
       for (auto iter = plan.freqs_to_tune.begin(); iter != plan.freqs_to_tune.end();) {
         // Begin a new data acquisition.
-        Acquisition acquisition(params, auxData, rtldev, data, actual_samplerate, *iter);
+        Acquisition acquisition(params, auxData, rtldev, dispatcher, actual_samplerate, *iter);
         try {
           // Read the required amount of data and process it.
           acquisition.run();
@@ -98,12 +97,13 @@ int main(int argc, char **argv)
           continue;
         }
 
+        acquisition.waitForResultsReady();
         // Print a summary (number of samples, readouts etc.) to stderr.
         acquisition.print_summary();
         // Write the gathered data to stdout.
         acquisition.write_data();
         // Print the histogram of the queue length to stderr.
-        data.printQueueHistogram();
+        acquisition.printQueueHistogram();
 
         // Check for interrupts.
         if (checkInterrupt(InterruptState::FinishNow))

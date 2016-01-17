@@ -20,13 +20,15 @@
 #ifndef ACQUISITION_H
 #define ACQUISITION_H
 
+#include <atomic>
+#include <condition_variable>
 #include <exception>
 #include <list>
+#include <thread>
 #include <vector>
 #include <rtl-sdr.h>
 
 #include "params.h"
-#include "datastore.h"
 #include "device.h"
 
 // This object contains data obtained from external sources.
@@ -77,13 +79,15 @@ protected:
 };
 
 
+class Dispatcher;
+
 // This class performs data acquisition at a particular frequency.
 class Acquisition {
 public:
   Acquisition(const Params& params,
               AuxData& aux,
               Rtlsdr& rtldev,
-              Datastore& data,
+              Dispatcher& dispatcher,
               int actual_samplerate,
               int freq);
 
@@ -93,7 +97,20 @@ public:
   // device readouts etc.) to stderr.
   void print_summary() const;
   // Write the gathered data to stdout.
-  void write_data() const;
+  void printQueueHistogram() const;
+  void write_data();
+  void markResultsReady();
+  void waitForResultsReady();
+
+  // The resulting power spectrum.
+  std::vector<double> pwr;
+
+  std::atomic<int64_t> repeatsToProcess;
+  int64_t repeatsProcessed;
+
+  std::mutex mutex;
+  std::condition_variable event;
+  bool resultsReady = false;
 
 protected:
   // A helper function that returns the current date and time in the format
@@ -103,7 +120,7 @@ protected:
   const Params& params;
   AuxData& aux;
   Rtlsdr& rtldev;
-  Datastore& data;
+  Dispatcher& dispatcher;
   // A cached version of the actual sample rate.
   int actual_samplerate;
   // The frequency to tune to in this acquisition.
@@ -118,6 +135,7 @@ protected:
   int64_t deviceReadouts = 0;
   // Number of successful readouts (i.e., with no dropped samples).
   int64_t successfulReadouts = 0;
+  std::vector<int> queue_histogram;
 };
 
 #endif // ACQUISITION_H

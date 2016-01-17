@@ -23,7 +23,7 @@
 #include <vector>
 #include <rtl-sdr.h>
 
-#include "datastore.h"
+using RawBuffer = std::vector<uint8_t>;
 
 class Rtlsdr {
 public:
@@ -37,7 +37,7 @@ public:
   std::vector<int> gains() const;
   uint32_t sample_rate() const;
   uint32_t frequency() const ;
-  bool read(Buffer& buffer) const;
+  bool read(RawBuffer& buffer) const;
 
   // Parameter setting.
   void set_gain(int gain);

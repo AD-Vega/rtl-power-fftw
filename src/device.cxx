@@ -89,7 +89,7 @@ uint32_t Rtlsdr::frequency() const {
   return frequency;
 }
 
-bool Rtlsdr::read(Buffer& buffer) const {
+bool Rtlsdr::read(RawBuffer& buffer) const {
   int n_read;
   rtlsdr_reset_buffer(dev);
   rtlsdr_read_sync(dev, buffer.data(), buffer.size(), &n_read);

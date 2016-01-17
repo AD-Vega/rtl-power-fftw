@@ -24,7 +24,7 @@
 #include <thread>
 
 #include "acquisition.h"
-#include "datastore.h"
+#include "dispatcher.h"
 #include "device.h"
 #include "interrupts.h"
 
@@ -211,11 +211,12 @@ void Plan::print() const {
 Acquisition::Acquisition(const Params& params_,
                          AuxData& aux_,
                          Rtlsdr& rtldev_,
-                         Datastore& data_,
+                         Dispatcher& dispatcher_,
                          int actual_samplerate_,
                          int freq_) :
-  params(params_), aux(aux_), rtldev(rtldev_), data(data_),
-  actual_samplerate(actual_samplerate_), freq(freq_)
+  pwr(params_.N), params(params_), aux(aux_), rtldev(rtldev_),
+  dispatcher(dispatcher_), actual_samplerate(actual_samplerate_),
+  freq(freq_), queue_histogram(params.buffers+1, 0)
 { }
 
 
@@ -248,11 +249,7 @@ void Acquisition::run() {
   }
 
   std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
-  std::fill(data.pwr.begin(), data.pwr.end(), 0);
-  data.acquisition_finished = false;
-  data.repeats_done = 0;
-
-  std::thread t(&Datastore::fftThread, std::ref(data));
+  std::fill(pwr.begin(), pwr.end(), 0);
 
   // Record the start-of-acquisition timestamp.
   startAcqTimestamp = currentDateTime();
@@ -262,21 +259,16 @@ void Acquisition::run() {
   using steady_clock = std::chrono::steady_clock;
   steady_clock::time_point stopTime = steady_clock::now() + std::chrono::milliseconds(int64_t(params.integration_time*1000));
 
-  std::unique_lock<std::mutex>
-  status_lock(data.status_mutex, std::defer_lock);
   int64_t dataTotal = 2 * params.N * params.repeats;
   int64_t dataRead = 0;
 
   while (dataRead < dataTotal) {
-    // Wait until a buffer is empty
-    status_lock.lock();
-    data.queue_histogram[data.empty_buffers.size()]++;
-    while (data.empty_buffers.empty())
-      data.status_change.wait(status_lock);
-
-    Buffer& buffer(*data.empty_buffers.front());
-    data.empty_buffers.pop_front();
-    status_lock.unlock();
+    // Obtain an empty container from the dispatcher.
+    size_t queueSize;
+    DataContainer container = dispatcher.emptyContainers.get(queueSize);
+    queue_histogram[queueSize]++;
+    container.acquisition = this;
+    RawBuffer& rawBuffer = *container.data;
 
     // Figure out how much data to read.
     int64_t dataNeeded = dataTotal - dataRead;
@@ -293,28 +285,23 @@ void Acquisition::run() {
       }
     }
     // Resize the buffer to match the needed amount of data.
-    buffer.resize(dataNeeded);
+    rawBuffer.resize(dataNeeded);
 
-    bool read_success = rtldev.read(buffer);
+    bool read_success = rtldev.read(rawBuffer);
     deviceReadouts++;
 
     if (!read_success) {
       std::cerr << "Error: dropped samples." << std::endl;
-      // There is effectively no data in this buffer - consider it empty.
-      status_lock.lock();
-      // Push the buffer to the front of the queue because it already has
-      // the correct size and we'll just pop it again on next iteration.
-      data.empty_buffers.push_front(&buffer);
-      status_lock.unlock();
-      // No need to notify the worker thread in this case.
+      // There is effectively no data in this container - consider it empty.
+      // Push the container to the front of the queue because it already has
+      // a buffer of the correct size and we'll just pop it again on next
+      // iteration.
+      dispatcher.emptyContainers.push_front(container);
     }
     else {
       successfulReadouts++;
       dataRead += dataNeeded;
-      status_lock.lock();
-      data.occupied_buffers.push_back(&buffer);
-      data.status_change.notify_all();
-      status_lock.unlock();
+      dispatcher.occupiedContainers.push_back(container);
     }
 
     if (params.strict_time && (steady_clock::now() >= stopTime))
@@ -329,24 +316,21 @@ void Acquisition::run() {
   endAcqTimestamp = currentDateTime();
   std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
-  status_lock.lock();
-  data.acquisition_finished = true;
-  data.status_change.notify_all();
-  status_lock.unlock();
-  t.join();
+  // Push a sentinel container into the queue to mark the end of acquisition.
+  dispatcher.occupiedContainers.push_back({this, nullptr});
 }
 
 void Acquisition::print_summary() const {
   std::cerr << "Actual number of (complex) samples collected: "
-    << (int64_t)params.N * data.repeats_done << std::endl;
+    << (int64_t)params.N * repeatsProcessed << std::endl;
   std::cerr << "Actual number of device readouts: " << deviceReadouts << std::endl;
   std::cerr << "Number of successful readouts: " << successfulReadouts << std::endl;
-  std::cerr << "Actual number of averaged spectra: " << data.repeats_done << std::endl;
+  std::cerr << "Actual number of averaged spectra: " << repeatsProcessed << std::endl;
   std::cerr << "Effective integration time: " <<
-    (double)params.N * data.repeats_done / actual_samplerate << " seconds" << std::endl;
+    (double)params.N * repeatsProcessed / actual_samplerate << " seconds" << std::endl;
 }
 
-void Acquisition::write_data() const {
+void Acquisition::write_data() {
   // Print the header
   std::cout << "# rtl-power-fftw output" << std::endl;
   std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
@@ -355,7 +339,7 @@ void Acquisition::write_data() const {
   std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
 
   //Interpolate the central point, to cancel DC bias.
-  data.pwr[params.N/2] = (data.pwr[params.N/2 - 1] + data.pwr[params.N/2+1]) / 2;
+  pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
   // Calculate the precision needed for displaying the frequency.
   const int extraDigitsFreq = 2;
@@ -365,7 +349,7 @@ void Acquisition::write_data() const {
 
   for (int i = 0; i < params.N; i++) {
     double freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
-    double pwrdb = 10*log10(data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
+    double pwrdb = 10*log10(pwr[i] / repeatsProcessed / params.N / actual_samplerate)
                    - (params.baseline ? aux.baseline_values[i] : 0);
     std::cout << std::setprecision(significantPlacesFreq)
               << freq
@@ -379,10 +363,29 @@ void Acquisition::write_data() const {
   std::cout.flush();
 }
 
+
+void Acquisition::markResultsReady() {
+  std::lock_guard<std::mutex> guard(mutex);
+  resultsReady = true;
+  event.notify_one();
+}
+
+void Acquisition::waitForResultsReady() {
+  std::unique_lock<std::mutex> lock(mutex);
+  event.wait(lock, [this]{ return resultsReady; });
+}
+
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 std::string Acquisition::currentDateTime() {
   time_t now = std::time(0);
   char buf[80];
   std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
   return buf;
+}
+
+void Acquisition::printQueueHistogram() const {
+  std::cerr << "Buffer queue histogram: ";
+  for (auto size : queue_histogram)
+    std::cerr << size << " ";
+  std::cerr << std::endl;
 }
