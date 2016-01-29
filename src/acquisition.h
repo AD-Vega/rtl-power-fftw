@@ -66,7 +66,7 @@ protected:
 class TuneError : public std::exception {
 public:
   TuneError(int freq_) : freq(freq_) {}
-  const char* what() {
+  const char* what() const noexcept {
     return "Could not tune to the given frequency.";
   }
   // The frequency that the receiver was unable to tune to.
