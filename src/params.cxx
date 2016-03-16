@@ -112,16 +112,22 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_bufferlen );
     TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
     cmd.add( arg_rate );
+    TCLAP::SwitchArg arg_quiet("q","quiet","Limit verbosity.", talkless);
+    cmd.add( arg_quiet );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
     TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
     cmd.add( arg_min_overlap );
+    TCLAP::ValueArg<std::string> arg_matrixMode("m","matrix","Will output data in binary matrix format plus separate metadata text file",false,"","filename (without extension)");
+    cmd.add( arg_matrixMode );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
     cmd.add( arg_freq );
+    TCLAP::ValueArg<std::string> arg_session_duration("e","elapsed","Scan session duration.",false,"","seconds");
+    cmd.add( arg_session_duration );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
     TCLAP::SwitchArg arg_continue("c","continue","Repeat the same measurement endlessly.", endless);
@@ -149,6 +155,7 @@ Params::Params(int argc, char** argv) {
     buffers = arg_buffers.getValue();
     buf_length = arg_bufferlen.getValue();
     endless = arg_continue.getValue();
+    talkless = arg_quiet.getValue();
     strict_time = arg_strict_time.getValue();
     min_overlap = arg_min_overlap.getValue();
     //clipped_output_isSet = arg_clipped.getValue();
@@ -230,9 +237,28 @@ Params::Params(int argc, char** argv) {
     baseline = arg_baseline.isSet();
     if (baseline)
       baseline_file = arg_baseline.getValue();
+
     window = arg_window.isSet();
     if (window)
       window_file = arg_window.getValue();
+
+    matrixMode = arg_matrixMode.isSet();
+    if (matrixMode) {
+      matrix_file = arg_matrixMode.getValue();
+      bin_file = matrix_file + ".bin";
+      meta_file = matrix_file + ".met";
+    }
+
+    if (arg_session_duration.isSet()) {
+      session_duration = parse_time(arg_session_duration.getValue());
+      if (session_duration <= 0) {
+        throw RPFexception(
+          "Could not parse the value given to --time. Expecting format [WdXhYm]Z[s]. Exiting.",
+          ReturnValue::InvalidArgument);
+      }
+      session_duration_isSet = true;
+    }
+
   }
   catch (TCLAP::ArgException &e) {
     throw RPFexception(

@@ -34,7 +34,7 @@ public:
   int dev_index = 0;
   int gain = 372;
   int64_t cfreq = 1420405752;
-  int64_t startfreq = 0; 
+  int64_t startfreq = 0;
   int64_t stopfreq = 0;
   int sample_rate = 2000000;
   double integration_time = 0;
@@ -53,6 +53,16 @@ public:
   bool freq_hopping_isSet = false;
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
+  int outcnt = 0;
+  double session_duration = 0;
+  bool session_duration_isSet = false;
+  bool talkless = false;  // default: verbose
+  bool matrixMode = false;  // default: original rtl-power-fftw output format
+  int finalfreq = 0;
+  std::string matrix_file;  // just name without extension
+  std::string bin_file; // name with .bin extension
+  std::string freq_file; // name with .frq extension
+  std::string meta_file; // name with .met extension
 };
 
 #endif // PARAMS_H
