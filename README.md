@@ -29,6 +29,14 @@ things in a neat way, C++11 functionality snuck into the program and
 therefore a modern, C++11 enabled compiler is needed to 
 compile `rtl_power_fftw`.
 
+## Prerequisites
+
+In order to prepare your environment to build from the sources you have to first install a couple of development libraries.
+This step is needed only the first time.
+
+sudo apt-get install libfftw3-dev
+sudo apt-get install libtclap-dev
+
 ## Installation
 
 To compile the program, cd into the directory where you have cloned the code
