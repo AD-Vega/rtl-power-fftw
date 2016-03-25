@@ -34,8 +34,8 @@ compile `rtl_power_fftw`.
 In order to prepare your environment to build from the sources you have to first install a couple of development libraries.
 This step is needed only the first time.
 
-sudo apt-get install libfftw3-dev
-sudo apt-get install libtclap-dev
+sudo apt-get install libfftw3-dev  
+sudo apt-get install libtclap-dev  
 
 ## Installation
 
