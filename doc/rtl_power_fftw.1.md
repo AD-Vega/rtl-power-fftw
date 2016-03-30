@@ -181,15 +181,15 @@ To scan for 5 minutes, with reduced verbosity and writing a binary file plus tex
 
 These parameters will produce a myscanfilename.bin binary file and, when the 5 minutes will be elapsed you will get also   myscanfilename.met  text file with this kind of content:
 
-500 # frequency bins (columns)
-2816 # scans (rows)
-144100000 # startFreq (Hz)
-146096000 # endFreq (Hz)
-4000 # stepFreq (Hz)
-0.025 # effective integration time secs
-0.0557726 # avgScanDur (sec)
-160324152435 # firstAcqTimestamp UTC
-160324152935 # lastAcqTimestamp UTC
+500 # frequency bins (columns)  
+2816 # scans (rows)  
+144100000 # startFreq (Hz)  
+146096000 # endFreq (Hz)  
+4000 # stepFreq (Hz)  
+0.025 # effective integration time secs  
+0.0557726 # avgScanDur (sec)  
+160324152435 # firstAcqTimestamp UTC  
+160324152935 # lastAcqTimestamp UTC  
 
 You can use these values for further processing and/or plotting the binary file content.
 The binary file is a continuous stream of float values (4 bytes each). You get all the columns (the FFT bins) in a scan, one scan after the other.  This matrix like layout can be easily plotted with gnuplot (or similar) and has the advantage of keeping minimum file size, maximum precision and fast rendering.
