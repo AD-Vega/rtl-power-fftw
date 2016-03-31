@@ -187,6 +187,12 @@ int main(int argc, char **argv)
           std::cout << std::endl;
         }
       }
+      else
+      {
+        // Mark the end of a measurement set with an additional empty line
+        // (one was already output as a terminator for the last data set).
+        std::cout << std::endl;
+      }
 
       if(params.endless) do_exit = false;   // exactly ! will force to never exit
 

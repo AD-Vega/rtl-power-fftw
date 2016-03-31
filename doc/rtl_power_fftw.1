@@ -73,6 +73,11 @@ RTL\-SDR device index of the device used for the measurement.
 .RS
 .RE
 .TP
+.B \f[C]\-e\ <session\ duration>\f[], \f[C]\-\-elapsed\ <session\ duration>\f[]
+Allows to specify the recording duration in hours, sec, mins...
+.RS
+.RE
+.TP
 .B \f[C]\-f\ <Hz|Hz:Hz>\f[], \f[C]\-\-freq\ <Hz|Hz:Hz>\f[]
 Center frequency of the receiver or the frequency range to scan.
 A number can be followed by a \f[C]k\f[], \f[C]M\f[] or \f[C]G\f[]
@@ -84,6 +89,18 @@ Frequency range consists of lower and upper bound, separated with colon.
 .TP
 .B \f[C]\-g\ <1/10th\ of\ dB>\f[], \f[C]\-\-gain\ <1/10th\ of\ dB>\f[]
 Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
+.RS
+.RE
+.TP
+.B \f[C]\-l\f[], \f[C]\-\-linear\f[]
+Calculate linear power values instead of logarithmic.
+.RS
+.RE
+.TP
+.B \f[C]\-m\ <file\ name\ without\ extension>\f[], \f[C]\-\-matrix\ <file\ name\ without\ extension>\f[]
+Specify a file name (no extension) and use it to store the power values
+in binary format within a .bin file plus a metadata text file with .met
+extension.
 .RS
 .RE
 .TP
@@ -101,6 +118,13 @@ meaningless).
 .B \f[C]\-p\ <ppm>\f[], \f[C]\-\-ppm\ <ppm>\f[]
 Correct for the oscillator error of RTL\-SDR device.
 The correction should be given in ppm.
+.RS
+.RE
+.TP
+.B \f[C]\-q\f[], \f[C]\-\-quiet\f[]
+Limit verbosity.
+Allows the various printouts to happen only the first time and not on
+every scan.
 .RS
 .RE
 .TP
@@ -377,6 +401,73 @@ Although be noted that omiting the option to specify number of bins
 baseline is a discouraged practise.
 You should always specify \f[C]\-\-bins\f[] along with
 \f[C]\-\-baseline\f[].
+.SH Binary output with metadata
+.PP
+To scan for 5 minutes, with reduced verbosity and writing a binary file
+plus text metafile:
+.IP
+.nf
+\f[C]
+rtl_power_fftw\ \-f\ 144100000:146100000\ \-b\ 500\ \-n\ 100\ \-g\ 350\ \-p\ 0\ \-e\ 5m\ \-q\ \-m\ myscanfilename
+\f[]
+.fi
+.PP
+These parameters will produce a myscanfilename.bin binary file and, when
+the 5 minutes will be elapsed you will get also myscanfilename.met text
+file with this kind of content:
+.PP
+500 # frequency bins (columns)
+.PD 0
+.P
+.PD
+2816 # scans (rows)
+.PD 0
+.P
+.PD
+144100000 # startFreq (Hz)
+.PD 0
+.P
+.PD
+146096000 # endFreq (Hz)
+.PD 0
+.P
+.PD
+4000 # stepFreq (Hz)
+.PD 0
+.P
+.PD
+0.025 # effective integration time secs
+.PD 0
+.P
+.PD
+0.0557726 # avgScanDur (sec)
+.PD 0
+.P
+.PD
+160324152435 # firstAcqTimestamp UTC
+.PD 0
+.P
+.PD
+160324152935 # lastAcqTimestamp UTC
+.PP
+You can use these values for further processing and/or plotting the
+binary file content.
+The binary file is a continuous stream of float values (4 bytes each).
+You get all the columns (the FFT bins) in a scan, one scan after the
+other.
+This matrix like layout can be easily plotted with gnuplot (or similar)
+and has the advantage of keeping minimum file size, maximum precision
+and fast rendering.
+The average scan duration is calculated across the whole scan session (5
+minutes in this case).
+The words columns and rows refer to the planned vertical (waterfall)
+rendering of the data.
+.PP
+Binary file size in this case is: 5,632,000 bytes.
+.PD 0
+.P
+.PD
+File size is directly influenced by parameters \-f \-b \-n \-e .
 .SS AUTHORS
 .PP
 Klemen Blokar <klemen.blokar@ad-vega.si>

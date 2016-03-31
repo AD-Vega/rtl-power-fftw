@@ -99,7 +99,7 @@ void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
 
 Params::Params(int argc, char** argv) {
   try {
-    TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "1.0-beta1");
+    TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "1.0-beta2");
     TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
     cmd.add( arg_buffers );
     TCLAP::ValueArg<std::string> arg_window("w","window","Use window function, from file or stdin.",false,"","file|-");
@@ -122,6 +122,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_matrixMode );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
+    TCLAP::SwitchArg arg_linear("l","linear","Calculate linear power values instead of logarithmic.", linear);
+    cmd.add( arg_linear );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
@@ -150,6 +152,7 @@ Params::Params(int argc, char** argv) {
       N++;
       std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
     }
+    linear = arg_linear.getValue();
     gain = arg_gain.getValue();
     sample_rate = arg_rate.getValue();
     buffers = arg_buffers.getValue();

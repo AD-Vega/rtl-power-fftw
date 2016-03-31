@@ -388,8 +388,14 @@ void Acquisition::write_data() const {
 
   for (int i = 0; i < params.N; i++) {
     freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
-    pwrdb = 10*log10(data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
-                   - (params.baseline ? aux.baseline_values[i] : 0);
+    if( params.linear ) {
+      pwrdb = (data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
+                     - (params.baseline ? aux.baseline_values[i] : 0);
+    }
+    else {
+      pwrdb = 10*log10(data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
+                     - (params.baseline ? aux.baseline_values[i] : 0);
+    }
     if( params.matrixMode ) {
       // we WERE writing a double, so 8 bytes, removed the sizeof()
       // we are NOW writing a float, so 4 bytes
