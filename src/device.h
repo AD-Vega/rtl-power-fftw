@@ -29,9 +29,11 @@ class Rtlsdr {
 public:
   Rtlsdr(int dev_index);
   ~Rtlsdr();
-  // Rtlsdr objects cannot be copied; they can be moved, though.
+  // Rtlsdr objects cannot be copied or moved.
   Rtlsdr(const Rtlsdr&) = delete;
   Rtlsdr& operator=(const Rtlsdr&) = delete;
+  Rtlsdr(Rtlsdr&& other) = delete;
+  Rtlsdr& operator=(Rtlsdr&& other) = delete;
 
   // Reading parameters & data.
   std::vector<int> gains() const;
