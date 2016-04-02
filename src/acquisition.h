@@ -94,11 +94,13 @@ public:
   void print_summary() const;
   // Write the gathered data to stdout.
   void write_data() const;
+  // Write the frequencies header to stdout (matrix format only)
+  void write_header(Plan plan) const;
 
 protected:
   // A helper function that returns the current date and time in the format
   // "YYYY-MM-DD HH:mm:ss UTC".
-  static std::string currentDateTime();
+  std::string currentDateTime();
 
   const Params& params;
   AuxData& aux;

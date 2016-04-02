@@ -35,11 +35,20 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-d <device index>`,  `--device <device index>`
 :   RTL-SDR device index of the device used for the measurement.
 
+`-e <session duration>`,  `--elapsed <session duration>`
+:   Allows to specify the recording duration in hours, sec, mins...
+
 `-f <Hz|Hz:Hz>`,  `--freq <Hz|Hz:Hz>`
 :   Center frequency of the receiver or the frequency range to scan. A number can be followed by a `k`, `M` or `G` multiplier, meaning that the frequency is expressed in kilohertz, megahertz or gigahertz. Frequency range consists of lower and upper bound, separated with colon.
 
 `-g <1/10th of dB>`,  `--gain <1/10th of dB>`
 :   Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
+
+`-l`,  `--linear`
+:   Calculate linear power values instead of logarithmic.
+
+`-m <file name without extension>`,  `--matrix <file name without extension>`
+:   Specify a file name (no extension) and use it to store the power values in binary format within a .bin file plus a metadata text file with .met extension.
 
 `-n <repeats>`,  `--repeats <repeats>`
 :   Number of spectra to average (incompatible with `-t`).
@@ -50,6 +59,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
+`-q`,  `--quiet`
+:   Limit verbosity. Allows the various printouts to happen only the first time and not on every scan.
+
 `-r <Hz>`,  `--rate <Hz>`
 :   Sample rate of the receiver in Hz.
 
@@ -57,8 +69,7 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 :   Size of the read buffers (leave it as it is unless you know what you are doing).
 
 `-T`,  `--strict-time`
-:   End measurement when the time set with `--time` option is up, regardless
-   of the number of gathered samples.
+:   End measurement when the time set with `--time` option is up, regardless of the number of gathered samples.
 
 `-t <seconds>`,  `--time <seconds>`
 :   Integration time (incompatible with -n). This is an _effective integration time_; see **INTEGRATION TIME** below for more info (in short, the measurement might take *longer* than that).
@@ -161,9 +172,34 @@ In this pipeline, `sed` intervenes by replacing the header and separators writte
 To scan frequencies between 100 MHz and 110 MHz and subtract baseline data from each scan, you could do:
 
     rtl_power_fftw -f 100M:110M -B baseline_data.dat > spectrum.dat
-    
+
 This example also illustrates the fact that for all the options where it is possible, the program selects some safe default values and the options can be omitted. Although be noted that omiting the option to specify number of bins (`-b`) and relying on its default value while subtracting baseline is a discouraged practise. You should always specify `--bins` along with `--baseline`.
 
+# Binary output with metadata
+
+To scan for 5 minutes, with reduced verbosity and writing a binary file plus text metafile:
+
+	rtl_power_fftw -f 144100000:146100000 -b 500 -n 100 -g 350 -p 0 -e 5m -q -m myscanfilename
+
+These parameters will produce a myscanfilename.bin binary file and, when the 5 minutes will be elapsed you will get also   myscanfilename.met  text file with this kind of content:
+
+500 # frequency bins (columns)  
+2816 # scans (rows)  
+144100000 # startFreq (Hz)  
+146096000 # endFreq (Hz)  
+4000 # stepFreq (Hz)  
+0.025 # effective integration time secs  
+0.0557726 # avgScanDur (sec)  
+160324152435 # firstAcqTimestamp UTC  
+160324152935 # lastAcqTimestamp UTC  
+
+You can use these values for further processing and/or plotting the binary file content.
+The binary file is a continuous stream of float values (4 bytes each). You get all the columns (the FFT bins) in a scan, one scan after the other.  This matrix like layout can be easily plotted with gnuplot (or similar) and has the advantage of keeping minimum file size, maximum precision and fast rendering.
+The average scan duration is calculated across the whole scan session (5 minutes in this case).
+The words columns and rows refer to the planned vertical (waterfall) rendering of the data.
+
+Binary file size in this case is: 5,632,000 bytes.  
+File size is directly influenced by parameters -f -b -n -e .
 
 ## AUTHORS
 

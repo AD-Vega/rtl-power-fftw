@@ -27,7 +27,7 @@
 #include "datastore.h"
 #include "device.h"
 #include "interrupts.h"
-
+#include "metadata.h"
 
 template <typename T>
 std::vector<T> read_inputfile(std::istream* stream) {
@@ -230,7 +230,8 @@ void Acquisition::run() {
   bool success = false;
   for (int tune_try = 0; !success && tune_try < max_tune_tries; tune_try++)
   {
-    std::cerr << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")" << std::endl;
+    if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) std::cerr << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")" << std::endl;
+
     try {
       rtldev.set_frequency(freq);
       tuned_freq = rtldev.frequency();
@@ -247,7 +248,7 @@ void Acquisition::run() {
     throw TuneError(freq);
   }
 
-  std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
+  if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   std::fill(data.pwr.begin(), data.pwr.end(), 0);
   data.acquisition_finished = false;
   data.repeats_done = 0;
@@ -256,7 +257,12 @@ void Acquisition::run() {
 
   // Record the start-of-acquisition timestamp.
   startAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+  time(&scanBeg);
+  if(cntTimeStamps==0) {
+    firstAcqTimestamp = currentDateTime();
+    cntTimeStamps++;
+  }
+  if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
 
   // Calculate the stop time. This will only be effective if --strict-time was given.
   using steady_clock = std::chrono::steady_clock;
@@ -327,7 +333,12 @@ void Acquisition::run() {
 
   // Record the end-of-acquisition timestamp.
   endAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
+  time(&scanEnd);
+  lastAcqTimestamp = currentDateTime();
+  sumScanDur = sumScanDur + difftime(scanEnd, scanBeg);
+  avgScanDur = sumScanDur / metaRows;
+
+  if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
 
   status_lock.lock();
   data.acquisition_finished = true;
@@ -347,12 +358,19 @@ void Acquisition::print_summary() const {
 }
 
 void Acquisition::write_data() const {
-  // Print the header
-  std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
-  std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
-  std::cout << "#" << std::endl;
-  std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+
+  std::ofstream binfile;
+  float pwrdb = 0.0;
+  double freq = 0.0;
+
+  if(!params.matrixMode) {
+    // Print the header
+    std::cout << "# rtl-power-fftw output" << std::endl;
+    std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
+    std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
+    std::cout << "#" << std::endl;
+    std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+  }
 
   //Interpolate the central point, to cancel DC bias.
   data.pwr[params.N/2] = (data.pwr[params.N/2 - 1] + data.pwr[params.N/2+1]) / 2;
@@ -363,26 +381,65 @@ void Acquisition::write_data() const {
     ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/params.N) + 1 + extraDigitsFreq);
   const int significantPlacesPwr = 6;
 
-  for (int i = 0; i < params.N; i++) {
-    double freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
-    double pwrdb = 10*log10(data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
-                   - (params.baseline ? aux.baseline_values[i] : 0);
-    std::cout << std::setprecision(significantPlacesFreq)
-              << freq
-              << " "
-              << std::setprecision(significantPlacesPwr)
-              << pwrdb
-              << std::endl;
+  if( params.matrixMode ) {
+    // we'll APPEND a new scan "row" of power values
+    binfile.open(params.bin_file, std::ios::out | std::ios::app | std::ios::binary);
   }
-  // Separate consecutive spectra with empty lines.
-  std::cout << std::endl;
-  std::cout.flush();
+
+  for (int i = 0; i < params.N; i++) {
+    freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
+    if( params.linear ) {
+      pwrdb = (data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
+                     - (params.baseline ? aux.baseline_values[i] : 0);
+    }
+    else {
+      pwrdb = 10*log10(data.pwr[i] / data.repeats_done / params.N / actual_samplerate)
+                     - (params.baseline ? aux.baseline_values[i] : 0);
+    }
+    if( params.matrixMode ) {
+      // we WERE writing a double, so 8 bytes, removed the sizeof()
+      // we are NOW writing a float, so 4 bytes
+      // binary file size for 15 mins with N=100 now 43.4 MB instead of 86.8 MB )
+      binfile.write( (char*)&pwrdb, 4 );
+      if(metaRows==0) {
+          metaCols = metaCols + 1;
+      }
+    }
+    else
+    {
+      std::cout << std::setprecision(significantPlacesFreq)
+                << freq
+                << " "
+                << std::setprecision(significantPlacesPwr)
+                << pwrdb
+                << std::endl;
+    }
+  }
+
+  if( params.matrixMode ) {
+    binfile.close();
+    if( freq >= params.finalfreq ) {
+      metaRows = metaRows + 1;
+    }
+  }
+
+  if( !params.matrixMode ) {
+    // Separate consecutive spectra with empty lines.
+    std::cout << std::endl;
+    std::cout.flush();
+  }
 }
 
 // Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
 std::string Acquisition::currentDateTime() {
   time_t now = std::time(0);
   char buf[80];
-  std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
+  if( params.matrixMode ) {
+    std::strftime(buf, sizeof(buf), "%y%m%d%H%M%S", std::gmtime(&now));
+  }
+  else
+  {
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
+  }
   return buf;
 }

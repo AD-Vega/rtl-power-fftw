@@ -3,6 +3,12 @@
 * Copyright (C) 2015 Klemen Blokar <klemen.blokar@ad-vega.si>
 *                    Andrej Lajovic <andrej.lajovic@ad-vega.si>
 *
+*                    Additions by: Mario Cannistra <mariocannistra@gmail.com>
+*                                 (added -e param for session duration)
+*                                 (added -q flag to limit verbosity)
+*                                 (added -m param to produce binary matrix output
+*                                                 with separate metadata file)
+*
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
@@ -17,6 +23,7 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 #include <iostream>
+#include <fstream>
 #include <rtl-sdr.h>
 
 #include "acquisition.h"
@@ -25,10 +32,27 @@
 #include "exceptions.h"
 #include "interrupts.h"
 #include "params.h"
+#include "metadata.h"
 
+#include <time.h>
+
+std::ofstream binfile, metafile;
+int metaRows = 0;
+int metaCols = 0;
+float avgScanDur = 0.0;
+float sumScanDur = 0.0;
+time_t scanEnd, scanBeg;
+int tunfreq;
+int startFreq, endFreq, stepFreq;
+std::string firstAcqTimestamp, lastAcqTimestamp;
+int cntTimeStamps;
 
 int main(int argc, char **argv)
 {
+  bool do_exit = false;
+  time_t exit_time = 0;
+  bool freqsMetaNeeded = true;
+
   ReturnValue final_retval = ReturnValue::Success;
 
   try {
@@ -39,6 +63,16 @@ int main(int argc, char **argv)
 
     // Set up RTL-SDR device.
     Rtlsdr rtldev(params.dev_index);
+
+    // endless will take precedence on session duration time
+    // so i'll force session_duration_isSet = false if endless has been specified
+    if(params.endless) params.session_duration_isSet = false;
+    if(params.session_duration_isSet)
+    {
+      // get desired session duration from cmd line args:
+      exit_time = (int) params.session_duration;
+      std::cerr << "Scan session duration: " << exit_time << " seconds" << std::endl;
+    }
 
     // Print the available gains and select the one nearest to the requested gain.
     rtldev.print_gains();
@@ -80,6 +114,20 @@ int main(int argc, char **argv)
     // Install a signal handler for detecting Ctrl+C.
     set_CtrlC_handler(true);
 
+    if(params.session_duration_isSet) {
+      // calculate at which time we have to stop looping
+      exit_time = time(NULL) + exit_time;
+    }
+
+    if(params.matrixMode) {
+      //std::ofstream binfile, freqfile, metafile;
+      // let's start truncating the binary file if already exists
+      // we will then write appending (see write_data)
+      binfile.open(params.bin_file, std::ios::out | std::ios::trunc | std::ios::binary);
+      binfile.close();
+    }
+
+    params.finalfreq = plan.freqs_to_tune.back();
     //Read from device and do FFT
     do {
       for (auto iter = plan.freqs_to_tune.begin(); iter != plan.freqs_to_tune.end();) {
@@ -99,24 +147,77 @@ int main(int argc, char **argv)
         }
 
         // Print a summary (number of samples, readouts etc.) to stderr.
-        acquisition.print_summary();
+        if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) acquisition.print_summary();
+
+
+        // in matrix mode we'll write a separate file with metadata about the scan session
+        // only once per run
+        if(params.matrixMode && freqsMetaNeeded) {
+          tunfreq = *plan.freqs_to_tune.begin();
+          startFreq = tunfreq + (0 - params.N/2.0) * actual_samplerate / params.N;
+          tunfreq = plan.freqs_to_tune.back();
+          endFreq   = tunfreq + ((params.N - 1) - params.N/2.0) * actual_samplerate / params.N;
+          stepFreq = actual_samplerate / params.N;
+
+          freqsMetaNeeded = false;
+        }
+
         // Write the gathered data to stdout.
         acquisition.write_data();
+
         // Print the histogram of the queue length to stderr.
-        data.printQueueHistogram();
+        if( (params.outcnt == 0 && params.talkless) || (params.talkless==false) ) data.printQueueHistogram();
 
         // Check for interrupts.
         if (checkInterrupt(InterruptState::FinishNow))
           break;
       }
-      // Mark the end of a measurement set with an additional empty line
-      // (one was already output as a terminator for the last data set).
-      std::cout << std::endl;
 
-      // Loop if continuous mode is set, but quit if the frequency list becomes
-      // empty or if the user interrupts the operation.
-    } while (params.endless && plan.freqs_to_tune.size()
-             && !checkInterrupt(InterruptState::FinishPass));
+      // if requested, avoid repeating all the printouts, just do that one time:
+      if( (params.outcnt == 0 && params.talkless) ) params.outcnt++;
+
+      if(params.session_duration_isSet) {
+        // here we manage session duration in seconds:
+        if (time(NULL) >= exit_time) {
+    			do_exit = true;
+          //metaRows = metaRows - 1; // let's fix the row count since we increment after lastfreq bin output
+          std::cerr << "Session duration elapsed." << std::endl;
+          // Mark the end of a measurement set with an additional empty line
+          // (one was already output as a terminator for the last data set).
+          std::cout << std::endl;
+        }
+      }
+      else
+      {
+        // Mark the end of a measurement set with an additional empty line
+        // (one was already output as a terminator for the last data set).
+        std::cout << std::endl;
+      }
+
+      if(params.endless) do_exit = false;   // exactly ! will force to never exit
+
+      if( !params.session_duration_isSet && !params.endless ) {
+        do_exit = true; // not an endless, no session duration, so we finish after first run
+      }
+
+      // unless you hit ctrl-c :
+      if(checkInterrupt(InterruptState::FinishPass)) do_exit = true;
+
+    } while ( !do_exit );
+
+    if(params.matrixMode) {
+      metafile.open(params.meta_file, std::ios::out | std::ios::trunc );
+      metafile << metaCols << " # frequency bins (columns)" << std::endl;
+      metafile << metaRows << " # scans (rows)" << std::endl;
+      metafile << startFreq << " # startFreq (Hz)" << std::endl;
+      metafile << endFreq << " # endFreq (Hz)" << std::endl;
+      metafile << stepFreq << " # stepFreq (Hz)" << std::endl;
+      metafile << (double)params.N * data.repeats_done / actual_samplerate << " # effective integration time secs" << std::endl;
+      metafile << avgScanDur << " # avgScanDur (sec)" << std::endl;
+      metafile << firstAcqTimestamp << " # firstAcqTimestamp UTC" << std::endl;
+      metafile << lastAcqTimestamp << " # lastAcqTimestamp UTC" << std::endl;
+      metafile.close();
+    }
 
     if (plan.freqs_to_tune.size() == 0) {
       // No valid frequencies left in the list. This is certainly not OK.
