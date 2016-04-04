@@ -25,6 +25,7 @@
 #include "exceptions.h"
 #include "interrupts.h"
 #include "params.h"
+#include "output.h"
 
 
 int main(int argc, char **argv)
@@ -74,7 +75,9 @@ int main(int argc, char **argv)
     // Print info on capture time and associated specifics.
     plan.print();
 
-    Dispatcher dispatcher(params, auxData, 4);
+    Dispatcher dispatcher(params, auxData, /* FIXME */ 4);
+    TextStream stream(params, auxData);
+    OutputWriter writer(&stream);
 
     // Install a signal handler for detecting Ctrl+C.
     set_CtrlC_handler(true);
@@ -101,7 +104,7 @@ int main(int argc, char **argv)
         // Print a summary (number of samples, readouts etc.) to stderr.
         acquisition.print_summary();
         // Write the gathered data to stdout.
-        acquisition.write_data();
+        writer.queue.push_back(&acquisition);
         // Print the histogram of the queue length to stderr.
         acquisition.printQueueHistogram();
 

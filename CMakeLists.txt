@@ -37,6 +37,7 @@ add_executable(rtl_power_fftw
   src/interrupts.cxx
   src/params.cxx
   src/fft_worker.cxx
+  src/output.cxx
   src/rtl_power_fftw.cxx
 )
 

@@ -96,35 +96,13 @@ public:
   // Print a summary of the acquisition (number of samples collected, number of
   // device readouts etc.) to stderr.
   void print_summary() const;
-  // Write the gathered data to stdout.
   void printQueueHistogram() const;
-  void write_data();
-  void markResultsReady();
-  void waitForResultsReady();
+  void waitForResultsReady() const;
 
   // The resulting power spectrum.
   std::vector<double> pwr;
-
-  std::atomic<int64_t> repeatsToProcess;
-  int64_t repeatsProcessed;
-
-  std::mutex mutex;
-  std::condition_variable event;
-  bool resultsReady = false;
-
-protected:
-  // A helper function that returns the current date and time in the format
-  // "YYYY-MM-DD HH:mm:ss UTC".
-  static std::string currentDateTime();
-
-  const Params& params;
-  AuxData& aux;
-  Rtlsdr& rtldev;
-  Dispatcher& dispatcher;
   // A cached version of the actual sample rate.
   int actual_samplerate;
-  // The frequency to tune to in this acquisition.
-  int freq;
   // The actual frequency returned by the device.
   int tuned_freq;
   // Timestamp for the start of the acquisition.
@@ -135,7 +113,28 @@ protected:
   int64_t deviceReadouts = 0;
   // Number of successful readouts (i.e., with no dropped samples).
   int64_t successfulReadouts = 0;
+  int64_t repeatsProcessed;
+
+
+protected:
+  // A helper function that returns the current date and time in the format
+  // "YYYY-MM-DD HH:mm:ss UTC".
+  static std::string currentDateTime();
+  void markResultsReady();
+
+  const Params& params;
+  AuxData& aux;
+  Rtlsdr& rtldev;
+  Dispatcher& dispatcher;
+  // The frequency to tune to in this acquisition.
+  int freq;
   std::vector<int> queue_histogram;
+  std::atomic<int64_t> repeatsToProcess;
+  mutable std::mutex mutex;
+  mutable std::condition_variable event;
+  bool resultsReady = false;
+
+  friend class Dispatcher;
 };
 
 #endif // ACQUISITION_H

@@ -18,9 +18,10 @@
 */
 
 #include <chrono>
+#include <cmath>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <thread>
 
 #include "acquisition.h"
@@ -214,8 +215,7 @@ Acquisition::Acquisition(const Params& params_,
                          Dispatcher& dispatcher_,
                          int actual_samplerate_,
                          int freq_) :
-  pwr(params_.N), params(params_), aux(aux_), rtldev(rtldev_),
-  dispatcher(dispatcher_), actual_samplerate(actual_samplerate_),
+  pwr(params_.N), actual_samplerate(actual_samplerate_), params(params_), aux(aux_), rtldev(rtldev_), dispatcher(dispatcher_),
   freq(freq_), queue_histogram(params.buffers+1, 0)
 { }
 
@@ -330,47 +330,16 @@ void Acquisition::print_summary() const {
     (double)params.N * repeatsProcessed / actual_samplerate << " seconds" << std::endl;
 }
 
-void Acquisition::write_data() {
-  // Print the header
-  std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << startAcqTimestamp << std::endl;
-  std::cout << "# Acquisition end: " << endAcqTimestamp << std::endl;
-  std::cout << "#" << std::endl;
-  std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
-
-  //Interpolate the central point, to cancel DC bias.
+void Acquisition::markResultsReady() {
+  // Finalize the result: interpolate the central point to cancel DC bias.
   pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
-  // Calculate the precision needed for displaying the frequency.
-  const int extraDigitsFreq = 2;
-  const int significantPlacesFreq =
-    ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/params.N) + 1 + extraDigitsFreq);
-  const int significantPlacesPwr = 6;
-
-  for (int i = 0; i < params.N; i++) {
-    double freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
-    double pwrdb = 10*log10(pwr[i] / repeatsProcessed / params.N / actual_samplerate)
-                   - (params.baseline ? aux.baseline_values[i] : 0);
-    std::cout << std::setprecision(significantPlacesFreq)
-              << freq
-              << " "
-              << std::setprecision(significantPlacesPwr)
-              << pwrdb
-              << std::endl;
-  }
-  // Separate consecutive spectra with empty lines.
-  std::cout << std::endl;
-  std::cout.flush();
-}
-
-
-void Acquisition::markResultsReady() {
   std::lock_guard<std::mutex> guard(mutex);
   resultsReady = true;
   event.notify_one();
 }
 
-void Acquisition::waitForResultsReady() {
+void Acquisition::waitForResultsReady() const {
   std::unique_lock<std::mutex> lock(mutex);
   event.wait(lock, [this]{ return resultsReady; });
 }

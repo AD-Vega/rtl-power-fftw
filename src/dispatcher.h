@@ -20,59 +20,13 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
+#include "utilities.h"
+
 #include <atomic>
-#include <complex>
-#include <condition_variable>
 #include <deque>
-#include <mutex>
 #include <thread>
-#include <vector>
 
-#include "device.h"
-#include "params.h"
-
-
-template <typename T>
-class ConcurrentQueue {
-public:
-  void push_back(T item) {
-    std::lock_guard<std::mutex> queueLock(mutex);
-    queue.push_back(item);
-    event.notify_one();
-  }
-
-  void push_front(T item) {
-    std::lock_guard<std::mutex> queueLock(mutex);
-    queue.push_front(item);
-    event.notify_one();
-  }
-
-  T get() {
-    std::unique_lock<std::mutex> queueLock(mutex);
-    return getItem(queueLock);
-  }
-
-  T get(size_t& queueSize) {
-    std::unique_lock<std::mutex> queueLock(mutex);
-    queueSize = queue.size();
-    return getItem(queueLock);
-  }
-
-protected:
-  T getItem(std::unique_lock<std::mutex>& queueLock) {
-    while (queue.empty())
-      event.wait(queueLock);
-    T item = queue.front();
-    queue.pop_front();
-    return item;
-  }
-
-  std::mutex mutex;
-  std::condition_variable event;
-  std::deque<T> queue;
-};
-
-
+class Params;
 class Acquisition;
 
 struct DataContainer {
