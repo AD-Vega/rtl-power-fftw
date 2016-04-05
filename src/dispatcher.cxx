@@ -25,7 +25,7 @@
 #include <bits/algorithmfwd.h>
 
 
-Dispatcher::Dispatcher(const Params& params_, const AuxData& aux_, int numberOfFFTWorkers) :
+Dispatcher::Dispatcher(const Params& params_, const AuxData& aux_) :
   params(params_), aux(aux_)
 {
   for (int i = 0; i < params.buffers; i++) {
@@ -33,7 +33,7 @@ Dispatcher::Dispatcher(const Params& params_, const AuxData& aux_, int numberOfF
     emptyContainers.push_back({nullptr, &rawBuffers.back()});
   }
 
-  for (int i = 0; i < numberOfFFTWorkers; i++) {
+  for (int i = 0; i < params.threads; i++) {
     auto worker = new FFTWorker(*this);
     workers.push_back(worker);
     idleWorkers.push_back(worker);

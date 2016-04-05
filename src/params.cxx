@@ -21,6 +21,7 @@
 #include <list>
 #include <string>
 #include <tclap/CmdLine.h>
+#include <thread>
 
 #include "params.h"
 #include "exceptions.h"
@@ -89,9 +90,9 @@ double parse_time(std::string s) {
 template <typename T>
 void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
   for (auto arg : list) {
-    if (arg->isSet() && arg->getValue() < 0) {
+    if (arg->isSet() && arg->getValue() <= 0) {
       throw RPFexception(
-        "Argument to '"  + arg->getName() + "' must be a positive number.",
+        "Argument to '"  + arg->getName() + "' must be >= 0.",
         ReturnValue::InvalidArgument);
     }
   }
@@ -118,6 +119,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_min_overlap );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
+    TCLAP::ValueArg<int> arg_threads("H","threads", "Number of FFT worker threads (defaults to the number of CPU cores).", false, threads, "threads");
+    cmd.add( arg_threads );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
@@ -134,7 +137,7 @@ Params::Params(int argc, char** argv) {
     cmd.parse(argc, argv);
 
     // Ain't this C++11 f**** magic? Watch this:
-    ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_gain, &arg_index, &arg_buffers, &arg_bufferlen});
+    ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_index, &arg_buffers, &arg_bufferlen, &arg_threads});
     ensure_positive_arg<int64_t>({&arg_repeats});
 
     dev_index = arg_index.getValue();
@@ -233,6 +236,19 @@ Params::Params(int argc, char** argv) {
     window = arg_window.isSet();
     if (window)
       window_file = arg_window.getValue();
+
+    if (arg_threads.isSet()) {
+      threads = arg_threads.getValue();
+    }
+    else {
+      // Try to find out the number of CPU cores.
+      threads = std::thread::hardware_concurrency();
+      if (threads == 0) {
+        // Can happen - the number of CPU cores could not be detected.
+        // Oh well. Fall back on the trusted, time-tested default:
+        threads = 1;
+      }
+    }
   }
   catch (TCLAP::ArgException &e) {
     throw RPFexception(

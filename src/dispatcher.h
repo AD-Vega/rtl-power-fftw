@@ -44,7 +44,7 @@ class FFTWorker;
 
 class Dispatcher {
 public:
-  Dispatcher(const Params& params, const AuxData& aux, int numberOfFFTWorkers);
+  Dispatcher(const Params& params, const AuxData& aux);
   ~Dispatcher();
 
   // We have threads going on; don't allow copying the object.

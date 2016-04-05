@@ -77,13 +77,7 @@ int main(int argc, char **argv)
     // Print info on capture time and associated specifics.
     plan.print();
 
-    auto cpuCores = std::thread::hardware_concurrency();
-    if (cpuCores == 0) {
-      // Can happen - the number of cores could not be detected.
-      // Oh well. Fall back on the trusted, time-tested default:
-      cpuCores = 1;
-    }
-    Dispatcher dispatcher(params, auxData, cpuCores);
+    Dispatcher dispatcher(params, auxData);
     TextStream stream(params, auxData);
     OutputWriter writer(&stream);
 
