@@ -27,6 +27,7 @@
 #include <iostream>
 #include <rtl-sdr.h>
 #include <memory>
+#include <thread>
 
 
 int main(int argc, char **argv)
@@ -76,7 +77,13 @@ int main(int argc, char **argv)
     // Print info on capture time and associated specifics.
     plan.print();
 
-    Dispatcher dispatcher(params, auxData, /* FIXME */ 4);
+    auto cpuCores = std::thread::hardware_concurrency();
+    if (cpuCores == 0) {
+      // Can happen - the number of cores could not be detected.
+      // Oh well. Fall back on the trusted, time-tested default:
+      cpuCores = 1;
+    }
+    Dispatcher dispatcher(params, auxData, cpuCores);
     TextStream stream(params, auxData);
     OutputWriter writer(&stream);
 
