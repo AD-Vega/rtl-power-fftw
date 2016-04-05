@@ -111,7 +111,7 @@ void Dispatcher::dispatchingOperation() {
         // fetch a new one.
         container.acquisition = nullptr;
         newAcquisition = true;
-        break;
+        continue;
       }
 
       if (newAcquisition) {
