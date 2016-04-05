@@ -16,9 +16,6 @@
 * You should have received a copy of the GNU General Public License
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
-#include <iostream>
-#include <rtl-sdr.h>
-
 #include "acquisition.h"
 #include "dispatcher.h"
 #include "device.h"
@@ -26,6 +23,10 @@
 #include "interrupts.h"
 #include "params.h"
 #include "output.h"
+
+#include <iostream>
+#include <rtl-sdr.h>
+#include <memory>
 
 
 int main(int argc, char **argv)
@@ -86,10 +87,11 @@ int main(int argc, char **argv)
     do {
       for (auto iter = plan.freqs_to_tune.begin(); iter != plan.freqs_to_tune.end();) {
         // Begin a new data acquisition.
-        Acquisition acquisition(params, auxData, rtldev, dispatcher, actual_samplerate, *iter);
+        auto acquisition = std::make_shared<Acquisition>(
+          params, auxData, rtldev, dispatcher, actual_samplerate, *iter);
         try {
           // Read the required amount of data and process it.
-          acquisition.run();
+          acquisition->run();
           iter++;
         }
         catch (TuneError &e) {
@@ -100,13 +102,12 @@ int main(int argc, char **argv)
           continue;
         }
 
-        acquisition.waitForResultsReady();
         // Print a summary (number of samples, readouts etc.) to stderr.
-        acquisition.print_summary();
+        // FIXME: acquisition->print_summary();
         // Write the gathered data to stdout.
-        writer.queue.push_back(&acquisition);
-        // Print the histogram of the queue length to stderr.
-        acquisition.printQueueHistogram();
+        writer.queue.push_back(acquisition);
+        // Print the histogram of the buffer queue length to stderr.
+        acquisition->printQueueHistogram();
 
         // Check for interrupts.
         if (checkInterrupt(InterruptState::FinishNow))

@@ -76,8 +76,8 @@ OutputWriter::~OutputWriter() {
 }
 
 void OutputWriter::run() {
-  Acquisition* acquisition;
-  while ((acquisition = queue.get()) != nullptr) {
+  while (auto acquisition = queue.get()) {
+    acquisition->waitForResultsReady();
     stream->write(*acquisition);
   }
 }

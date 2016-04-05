@@ -21,6 +21,7 @@
 #define OUTPUT_H
 
 #include "utilities.h"
+#include <memory>
 #include <thread>
 
 class Acquisition;
@@ -58,7 +59,7 @@ public:
   OutputWriter& operator=(const OutputWriter&) = delete;
   OutputWriter& operator=(const OutputWriter&&) = delete;
 
-  ConcurrentQueue<Acquisition*> queue;
+  ConcurrentQueue<std::shared_ptr<Acquisition>> queue;
 
 protected:
   void run();
