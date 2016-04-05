@@ -26,25 +26,6 @@ std::mutex FFTWorker::fftwMutex;
 FFTWorker::FFTWorker(Dispatcher& dispatcher_) :
   dispatcher(dispatcher_), N(dispatcher.params.N)
 {
-  fftThread = std::thread(&FFTWorker::fftOperation, this);
-}
-
-FFTWorker::~FFTWorker() {
-  {
-    std::lock_guard<std::mutex> controlLock(controlMutex);
-    doExit = true;
-    controlEvent.notify_one();
-  }
-  fftThread.join();
-}
-
-void FFTWorker::startFFT() {
-  std::lock_guard<std::mutex> controlLock(controlMutex);
-  doFFT = true;
-  controlEvent.notify_one();
-}
-
-void FFTWorker::fftOperation() {
   {
     // From all the FFTW functions, fftw_execute() is the only one that is
     // guaranteed to be thread-safe. The allocations, plans etc. have to be
@@ -57,6 +38,32 @@ void FFTWorker::fftOperation() {
                             FFTW_FORWARD, FFTW_MEASURE);
   }
 
+  fftThread = std::thread(&FFTWorker::fftOperation, this);
+}
+
+FFTWorker::~FFTWorker() {
+  {
+    std::lock_guard<std::mutex> controlLock(controlMutex);
+    doExit = true;
+    controlEvent.notify_one();
+  }
+  fftThread.join();
+
+  // Deallocate data.
+  // Protect access to FFTW calls.
+  std::lock_guard<std::mutex> guard(fftwMutex);
+  fftwf_destroy_plan(plan);
+  fftwf_free(inbuf);
+  fftwf_free(outbuf);
+}
+
+void FFTWorker::startFFT() {
+  std::lock_guard<std::mutex> controlLock(controlMutex);
+  doFFT = true;
+  controlEvent.notify_one();
+}
+
+void FFTWorker::fftOperation() {
   std::unique_lock<std::mutex> controlLock(controlMutex);
   while (!doExit) {
     while (!doFFT && !doExit)
@@ -68,15 +75,5 @@ void FFTWorker::fftOperation() {
     fftwf_execute(plan);
     doFFT = false;
     dispatcher.workerFinished(this);
-  }
-
-  // Deallocate the data.
-  {
-    // Protect access to FFTW calls.
-    std::lock_guard<std::mutex> guard(fftwMutex);
-
-    fftwf_destroy_plan(plan);
-    fftwf_free(inbuf);
-    fftwf_free(outbuf);
   }
 }
