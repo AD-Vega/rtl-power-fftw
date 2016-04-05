@@ -133,7 +133,9 @@ void Dispatcher::dispatchingOperation() {
     }
 
     auto& data = *container.data;
-    while (fft_index < params.N && buffer_index < data.size()) {
+    const auto dataSize = data.size();
+
+    while (fft_index < params.N && buffer_index < dataSize) {
       //The magic aligment happens here: we have to change the phase of each next complex sample
       //by pi - this means that even numbered samples stay the same while odd numbered samples
       //get multiplied by -1 (thus rotated by pi in complex plane).
@@ -153,7 +155,7 @@ void Dispatcher::dispatchingOperation() {
       worker = nullptr;
     }
 
-    if (buffer_index == data.size()) {
+    if (buffer_index == dataSize) {
       // We have used all the data from this buffer, so it can now be reused.
       container.acquisition = nullptr;
       emptyContainers.push_back(container);
