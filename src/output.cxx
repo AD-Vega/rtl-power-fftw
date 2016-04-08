@@ -45,11 +45,6 @@ TextStream::TextStream(const Params& params_, AuxData& aux_) :
 }
 
 void TextStream::write(Acquisition& acq) {
-  // A few shorthands to save us some typing.
-  const auto& pwr = acq.pwr;
-  const auto& tuned_freq = acq.tuned_freq;
-  const auto& actual_samplerate = acq.actual_samplerate;
-
   // Print the header
   *stream << "# rtl-power-fftw output\n"
           << "# Acquisition start: " << acq.startAcqTimestamp << "\n"
@@ -59,15 +54,13 @@ void TextStream::write(Acquisition& acq) {
 
   // Calculate the precision needed for displaying the frequency.
   const int extraDigitsFreq = 2;
-  const int significantPlacesFreq =
-    ceil(floor(log10(tuned_freq)) - log10(actual_samplerate/params.N) + 1 + extraDigitsFreq);
+  const int significantPlacesFreq = ceil(floor(log10(acq.tuned_freq))
+    - log10(acq.actual_samplerate/params.N) + 1 + extraDigitsFreq);
   const int significantPlacesPwr = 6;
 
   for (int i = 0; i < params.N; i++) {
-    double freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
-    double pwrdb = 10*log10(pwr[i] / acq.repeatsProcessed / params.N / actual_samplerate)
-                   - (params.baseline ? aux.baseline_values[i] : 0);
-    *stream << std::setprecision(significantPlacesFreq) << freq
+    const double pwrdb = 10*log10(acq.pwr[i]);
+    *stream << std::setprecision(significantPlacesFreq) << acq.frequency(i)
               << " "
               << std::setprecision(significantPlacesPwr) << pwrdb
               << "\n";

@@ -346,9 +346,19 @@ void Acquisition::markResultsReady() {
   // Finalize the result: interpolate the central point to cancel DC bias.
   pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
+  // Normalize and subtract baseline.
+  for (size_t i = 0; i < params.N; i++) {
+    pwr[i] = (pwr[i] / repeatsProcessed / params.N / actual_samplerate)
+             - (params.baseline ? aux.baseline_values[i] : 0);
+  }
+
   std::lock_guard<std::mutex> guard(mutex);
   resultsReady = true;
   event.notify_one();
+}
+
+double Acquisition::frequency(size_t index) {
+  return tuned_freq + (index - params.N/2.0) * actual_samplerate / params.N;
 }
 
 void Acquisition::waitForResultsReady() const {

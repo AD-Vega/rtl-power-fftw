@@ -97,6 +97,8 @@ public:
   // device readouts etc.) to stderr.
   void printSummary() const;
   void waitForResultsReady() const;
+  // Convenience function: returns the frequency of the specified FFT bin.
+  double frequency(size_t index);
 
   // The resulting power spectrum.
   std::vector<double> pwr;
