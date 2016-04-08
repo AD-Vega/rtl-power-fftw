@@ -105,7 +105,7 @@ void OutputWriter::run() {
 
 
 std::mutex Diagnostics::mutex;
-LogLevel Diagnostics::threshold = LogLevel::Info;
+LogLevel Diagnostics::threshold = LogLevel::Operation;
 std::ofstream Diagnostics::nullStream;
 
 Diagnostics::~Diagnostics() {

@@ -235,7 +235,7 @@ void Acquisition::run() {
   bool success = false;
   for (int tune_try = 0; !success && tune_try < max_tune_tries; tune_try++)
   {
-    Diagnostics() << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")\n";
+    Diagnostics(LogLevel::Operation) << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")\n";
     try {
       rtldev.set_frequency(freq);
       tuned_freq = rtldev.frequency();
@@ -257,8 +257,9 @@ void Acquisition::run() {
   // Record the start-of-acquisition timestamp.
   startAcqTimestamp = currentDateTime();
 
-  Diagnostics() << "Device tuned to: " << tuned_freq << " Hz\n"
-                << "Acquisition started at " << startAcqTimestamp << "\n";
+  Diagnostics(LogLevel::Operation)
+    << "Device tuned to: " << tuned_freq << " Hz\n"
+    << "Acquisition started at " << startAcqTimestamp << "\n";
 
   // Calculate the stop time. This will only be effective if --strict-time was given.
   using steady_clock = std::chrono::steady_clock;
@@ -319,14 +320,14 @@ void Acquisition::run() {
 
   // Record the end-of-acquisition timestamp.
   endAcqTimestamp = currentDateTime();
-  Diagnostics() << "Acquisition done at " << endAcqTimestamp << "\n";
+  Diagnostics(LogLevel::Operation) << "Acquisition done at " << endAcqTimestamp << "\n";
 
   // Push a sentinel container into the queue to mark the end of acquisition.
   dispatcher.occupiedContainers.push_back({this, nullptr});
 }
 
 void Acquisition::printSummary() const {
-  Diagnostics diag;
+  Diagnostics diag(LogLevel::Operation);
   diag << "Actual number of (complex) samples collected: "
        << (int64_t)params.N * repeatsProcessed << "\n"
        << "Actual number of device readouts: " << deviceReadouts << "\n"

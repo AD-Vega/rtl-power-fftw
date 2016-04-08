@@ -101,6 +101,7 @@ protected:
 
 enum class LogLevel {
   Debug,
+  Operation,
   Info,
   Warning,
   Error

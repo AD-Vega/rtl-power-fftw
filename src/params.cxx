@@ -114,6 +114,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_bufferlen );
     TCLAP::ValueArg<int> arg_rate("r","rate","Sample rate of the receiver.",false,sample_rate,"samples/s");
     cmd.add( arg_rate );
+    TCLAP::MultiSwitchArg arg_quiet("q","quiet","Limit verbosity: use once for reduced verbosity, twice for an almost complete silence.");
+    cmd.add( arg_quiet );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
     TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
@@ -140,6 +142,14 @@ Params::Params(int argc, char** argv) {
     // Ain't this C++11 f**** magic? Watch this:
     ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_index, &arg_buffers, &arg_bufferlen, &arg_threads});
     ensure_positive_arg<int64_t>({&arg_repeats});
+
+    // Verbosity depends on the number of times the --quiet switch was given.
+    if (arg_quiet.getValue() == 0)
+      Diagnostics::setThreshold(LogLevel::Operation);
+    else if (arg_quiet.getValue() == 1)
+      Diagnostics::setThreshold(LogLevel::Info);
+    else
+      Diagnostics::setThreshold(LogLevel::Warning);
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
