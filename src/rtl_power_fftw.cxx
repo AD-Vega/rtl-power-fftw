@@ -113,18 +113,15 @@ int main(int argc, char **argv)
           continue;
         }
 
-        // Print a summary (number of samples, readouts etc.) to stderr.
-        // FIXME: acquisition->print_summary();
-        // Write the gathered data to stdout.
-        writer.queue.push_back(acquisition);
+        // Pass the acquisition to the writer. The data will be output when it is ready.
+        writer.queueData(acquisition);
 
         // Check for interrupts.
         if (checkInterrupt(InterruptState::FinishNow))
           break;
       }
-      // Mark the end of a measurement set with an additional empty line
-      // (one was already output as a terminator for the last data set).
-      std::cout << std::endl;
+      // Mark the end of a measurement set.
+      writer.queueDelimiter();
 
       // Loop if continuous mode is set, but quit if the frequency list becomes
       // empty or if the user interrupts the operation.

@@ -325,7 +325,7 @@ void Acquisition::run() {
   dispatcher.occupiedContainers.push_back({this, nullptr});
 }
 
-void Acquisition::print_summary() const {
+void Acquisition::printSummary() const {
   Diagnostics diag;
   diag << "Actual number of (complex) samples collected: "
        << (int64_t)params.N * repeatsProcessed << "\n"

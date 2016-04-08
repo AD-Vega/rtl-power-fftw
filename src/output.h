@@ -36,6 +36,7 @@ class OutputStream {
 public:
   virtual ~OutputStream() {};
   virtual void write(Acquisition& acquisition) = 0;
+  virtual void writeDelimiter() = 0;
 };
 
 
@@ -43,6 +44,7 @@ class TextStream : public OutputStream {
 public:
   TextStream(const Params& params, AuxData& aux);
   void write(Acquisition& acquisition);
+  void writeDelimiter();
 
 protected:
   const Params& params;
@@ -62,11 +64,36 @@ public:
   OutputWriter& operator=(const OutputWriter&) = delete;
   OutputWriter& operator=(const OutputWriter&&) = delete;
 
-  ConcurrentQueue<std::shared_ptr<Acquisition>> queue;
+  void queueData(std::shared_ptr<Acquisition> acquisition);
+  void queueDelimiter();
 
 protected:
   void run();
 
+  // A message that can be passed to the writing thread.
+  // It contains a command and, optionally, a shared ptr to Acquisition.
+  struct Message {
+    // Possible commands.
+    enum class Command {
+      WriteData,
+      WriteDelimiter,
+      Quit
+    };
+
+    Message(Command command_, std::shared_ptr<Acquisition> acquisition_ = nullptr) :
+      command(command_), acquisition(acquisition_)
+      {}
+
+    // The message evaluates to true if the command is not Quit.
+    operator bool() const {
+      return command != Command::Quit;
+    }
+
+    Command command;
+    std::shared_ptr<Acquisition> acquisition;
+  };
+
+  ConcurrentQueue<Message> queue;
   OutputStream* stream;
   std::thread thread;
 };

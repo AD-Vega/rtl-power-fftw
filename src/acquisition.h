@@ -95,7 +95,7 @@ public:
   void run();
   // Print a summary of the acquisition (number of samples collected, number of
   // device readouts etc.) to stderr.
-  void print_summary() const;
+  void printSummary() const;
   void waitForResultsReady() const;
 
   // The resulting power spectrum.
