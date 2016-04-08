@@ -35,11 +35,17 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-d <device index>`,  `--device <device index>`
 :   RTL-SDR device index of the device used for the measurement.
 
+`-e <duration>`,  `--session-duration <duration>`
+:   Similar to `--continue`, but with limited duration. The program will repeat the same set of measurements until the time is up. The ongoing frequency scan is always completed so the actual running time might exceed the specified duration, especially if large frequency spans are used. For argument format, see the `--time` option.
+
 `-f <Hz|Hz:Hz>`,  `--freq <Hz|Hz:Hz>`
 :   Center frequency of the receiver or the frequency range to scan. A number can be followed by a `k`, `M` or `G` multiplier, meaning that the frequency is expressed in kilohertz, megahertz or gigahertz. Frequency range consists of lower and upper bound, separated with colon.
 
 `-g <1/10th of dB>`,  `--gain <1/10th of dB>`
 :   Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
+
+`-l`,  `--linear`
+:   Output linear power values instead of logarithmic.
 
 `-n <repeats>`,  `--repeats <repeats>`
 :   Number of spectra to average (incompatible with `-t`).
@@ -50,6 +56,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
+`-q`,  `--quiet`
+:   Limit verbosity. Use once for reduced verbosity, twice for an almost complete silence.
+
 `-r <Hz>`,  `--rate <Hz>`
 :   Sample rate of the receiver in Hz.
 
@@ -57,11 +66,10 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 :   Size of the read buffers (leave it as it is unless you know what you are doing).
 
 `-T`,  `--strict-time`
-:   End measurement when the time set with `--time` option is up, regardless
-   of the number of gathered samples.
+:   End measurement when the time set with `--time` option is up, regardless of the number of gathered samples.
 
-`-t <seconds>`,  `--time <seconds>`
-:   Integration time (incompatible with -n). This is an _effective integration time_; see **INTEGRATION TIME** below for more info (in short, the measurement might take *longer* than that).
+`-t <duration>`,  `--time <duration>`
+:   Integration time (incompatible with -n). This is an _effective integration time_; see **INTEGRATION TIME** below for more info (in short, the measurement might take *longer* than that). The argument can be specified in days, hours, minutes, and seconds (or a combination thereof) by appending `d`, `h`, `m` or `s` suffixes to the numbers. It is permissible to omit the `s` for seconds.
 
 `-w <file|->`,  `--window <file|->`
 :   Use a window function, read data from a file or from standard input. See **BASELINE AND WINDOW FUNCTION DATA** below for format and further considerations.

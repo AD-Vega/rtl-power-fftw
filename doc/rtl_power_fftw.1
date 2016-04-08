@@ -73,6 +73,17 @@ RTL\-SDR device index of the device used for the measurement.
 .RS
 .RE
 .TP
+.B \f[C]\-e\ <duration>\f[], \f[C]\-\-session\-duration\ <duration>\f[]
+Similar to \f[C]\-\-continue\f[], but with limited duration.
+The program will repeat the same set of measurements until the time is
+up.
+The ongoing frequency scan is always completed so the actual running
+time might exceed the specified duration, especially if large frequency
+spans are used.
+For argument format, see the \f[C]\-\-time\f[] option.
+.RS
+.RE
+.TP
 .B \f[C]\-f\ <Hz|Hz:Hz>\f[], \f[C]\-\-freq\ <Hz|Hz:Hz>\f[]
 Center frequency of the receiver or the frequency range to scan.
 A number can be followed by a \f[C]k\f[], \f[C]M\f[] or \f[C]G\f[]
@@ -84,6 +95,11 @@ Frequency range consists of lower and upper bound, separated with colon.
 .TP
 .B \f[C]\-g\ <1/10th\ of\ dB>\f[], \f[C]\-\-gain\ <1/10th\ of\ dB>\f[]
 Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
+.RS
+.RE
+.TP
+.B \f[C]\-l\f[], \f[C]\-\-linear\f[]
+Output linear power values instead of logarithmic.
 .RS
 .RE
 .TP
@@ -104,6 +120,12 @@ The correction should be given in ppm.
 .RS
 .RE
 .TP
+.B \f[C]\-q\f[], \f[C]\-\-quiet\f[]
+Limit verbosity.
+Use once for reduced verbosity, twice for an almost complete silence.
+.RS
+.RE
+.TP
 .B \f[C]\-r\ <Hz>\f[], \f[C]\-\-rate\ <Hz>\f[]
 Sample rate of the receiver in Hz.
 .RS
@@ -121,11 +143,15 @@ regardless of the number of gathered samples.
 .RS
 .RE
 .TP
-.B \f[C]\-t\ <seconds>\f[], \f[C]\-\-time\ <seconds>\f[]
+.B \f[C]\-t\ <duration>\f[], \f[C]\-\-time\ <duration>\f[]
 Integration time (incompatible with \-n).
 This is an \f[I]effective integration time\f[]; see \f[B]INTEGRATION
 TIME\f[] below for more info (in short, the measurement might take
 \f[I]longer\f[] than that).
+The argument can be specified in days, hours, minutes, and seconds (or a
+combination thereof) by appending \f[C]d\f[], \f[C]h\f[], \f[C]m\f[] or
+\f[C]s\f[] suffixes to the numbers.
+It is permissible to omit the \f[C]s\f[] for seconds.
 .RS
 .RE
 .TP
