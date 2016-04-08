@@ -24,6 +24,7 @@
 #include "params.h"
 #include "output.h"
 
+#include <chrono>
 #include <iostream>
 #include <rtl-sdr.h>
 #include <memory>
@@ -90,6 +91,10 @@ int main(int argc, char **argv)
     TextStream stream(params, auxData);
     OutputWriter writer(&stream);
 
+    // For limited session (scanning) duration.
+    std::chrono::time_point<std::chrono::steady_clock> scanUntil =
+      std::chrono::steady_clock::now() + std::chrono::seconds(params.session_duration);
+
     // Install a signal handler for detecting Ctrl+C.
     set_CtrlC_handler(true);
 
@@ -123,10 +128,15 @@ int main(int argc, char **argv)
       // Mark the end of a measurement set.
       writer.queueDelimiter();
 
-      // Loop if continuous mode is set, but quit if the frequency list becomes
-      // empty or if the user interrupts the operation.
-    } while (params.endless && plan.freqs_to_tune.size()
-             && !checkInterrupt(InterruptState::FinishPass));
+      // Loop if continuous mode or session duration is set, but quit if the frequency
+      // list becomes empty, if the user interrupts the operation or if the session time
+      // limit is exceeded.
+    } while ((params.endless
+              || (params.session_duration >= 0
+                  && std::chrono::steady_clock::now() < scanUntil))
+             && plan.freqs_to_tune.size()
+             && !checkInterrupt(InterruptState::FinishPass)
+            );
 
     if (plan.freqs_to_tune.size() == 0) {
       // No valid frequencies left in the list. This is certainly not OK.

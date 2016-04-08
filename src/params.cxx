@@ -106,7 +106,7 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_buffers );
     TCLAP::ValueArg<std::string> arg_window("w","window","Use window function, from file or stdin.",false,"","file|-");
     cmd.add( arg_window );
-    TCLAP::ValueArg<std::string> arg_integration_time("t","time","Integration time (incompatible with -n).",false,"","seconds");
+    TCLAP::ValueArg<std::string> arg_integration_time("t","time","Integration time (incompatible with -n).",false,"","[WdXhYm]Z[s]");
     cmd.add( arg_integration_time );
     TCLAP::SwitchArg arg_strict_time("T","strict-time","End measurement when the time set with --time option is up, regardless of gathered samples.",strict_time);
     cmd.add( arg_strict_time );
@@ -130,9 +130,11 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
     cmd.add( arg_freq );
+    TCLAP::ValueArg<std::string> arg_session_duration("e","session-duration","Scan session duration (incompatible with --continue).",false,"","[WdXhYm]Z[s]");
+    cmd.add( arg_session_duration );
     TCLAP::ValueArg<int> arg_index("d","device","RTL-SDR device index.",false,dev_index,"device index");
     cmd.add( arg_index );
-    TCLAP::SwitchArg arg_continue("c","continue","Repeat the same measurement endlessly.", endless);
+    TCLAP::SwitchArg arg_continue("c","continue","Repeat the same measurement endlessly (incompatible with --session-duration).", endless);
     cmd.add( arg_continue );
     TCLAP::ValueArg<int> arg_bins("b","bins","Number of bins in FFT spectrum (must be even number)",false,N,"bins in FFT spectrum");
     cmd.add( arg_bins );
@@ -152,6 +154,13 @@ Params::Params(int argc, char** argv) {
       Diagnostics::setThreshold(LogLevel::Info);
     else
       Diagnostics::setThreshold(LogLevel::Warning);
+
+    // Sanity checks
+    if (arg_continue.isSet() && arg_session_duration.isSet()) {
+      throw RPFexception(
+        "Command line options --continue and --session-duration are incompatible. Exiting.",
+        ReturnValue::InvalidArgument);
+    }
 
     dev_index = arg_index.getValue();
     N = arg_bins.getValue();
@@ -241,6 +250,16 @@ Params::Params(int argc, char** argv) {
       Diagnostics(LogLevel::Warning) << "Warning: option --strict-time has no effect without --time.\n";
       strict_time = false;
     }
+
+    if (arg_session_duration.isSet()) {
+      session_duration = parse_time(arg_session_duration.getValue());
+      if (session_duration <= 0) {
+        throw RPFexception(
+          "Could not parse the value given to --time. Expecting format [WdXhYm]Z[s]. Exiting.",
+          ReturnValue::InvalidArgument);
+      }
+    }
+
     //Optimally adjust buffer length for small sample sizes only if buffer length is not user defined.
     if (arg_bufferlen.isSet()) {
       buf_length_isSet = true;

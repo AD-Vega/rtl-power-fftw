@@ -55,6 +55,7 @@ public:
   int64_t repeats = buf_length/(2*N);
   int threads = 1;
   std::string outputFile;
+  int session_duration = -1;
 };
 
 #endif // PARAMS_H
