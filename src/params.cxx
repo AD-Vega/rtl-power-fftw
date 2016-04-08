@@ -124,6 +124,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_min_overlap );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
     cmd.add( arg_repeats );
+    TCLAP::SwitchArg arg_linear("l","linear","Output linear power values instead of logarithmic.", linear);
+    cmd.add( arg_linear );
     TCLAP::ValueArg<int> arg_threads("H","threads", "Number of FFT worker threads (defaults to the number of CPU cores).", false, threads, "threads");
     cmd.add( arg_threads );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
@@ -177,7 +179,7 @@ Params::Params(int argc, char** argv) {
     endless = arg_continue.getValue();
     strict_time = arg_strict_time.getValue();
     min_overlap = arg_min_overlap.getValue();
-    //clipped_output_isSet = arg_clipped.getValue();
+    linear = arg_linear.getValue();
 
     // Due to USB specifics, buffer length for reading rtl_sdr device
     // must be a multiple of 16384. We have to keep it that way.

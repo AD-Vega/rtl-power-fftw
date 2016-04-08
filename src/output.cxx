@@ -45,12 +45,14 @@ TextStream::TextStream(const Params& params_, AuxData& aux_) :
 }
 
 void TextStream::write(Acquisition& acq) {
+  std::string units = params.linear ? "power/Hz" : "dB/Hz";
+
   // Print the header
   *stream << "# rtl-power-fftw output\n"
           << "# Acquisition start: " << acq.startAcqTimestamp << "\n"
           << "# Acquisition end: " << acq.endAcqTimestamp << "\n"
           << "#\n"
-          << "# frequency [Hz] power spectral density [dB/Hz]\n";
+          << "# frequency [Hz] power spectral density [" << units << "]\n";
 
   // Calculate the precision needed for displaying the frequency.
   const int extraDigitsFreq = 2;
@@ -59,10 +61,14 @@ void TextStream::write(Acquisition& acq) {
   const int significantPlacesPwr = 6;
 
   for (int i = 0; i < params.N; i++) {
-    const double pwrdb = 10*log10(acq.pwr[i]);
+    double value = acq.pwr[i];
+    if (!params.linear) {
+      // Convert to dB.
+      value = 10 * log10(value);
+    }
     *stream << std::setprecision(significantPlacesFreq) << acq.frequency(i)
               << " "
-              << std::setprecision(significantPlacesPwr) << pwrdb
+              << std::setprecision(significantPlacesPwr) << value
               << "\n";
   }
   // Separate consecutive spectra with empty lines.

@@ -56,6 +56,7 @@ public:
   int threads = 1;
   std::string outputFile;
   int session_duration = -1;
+  bool linear = false;
 };
 
 #endif // PARAMS_H
