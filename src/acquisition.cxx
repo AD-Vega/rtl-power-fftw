@@ -28,6 +28,7 @@
 #include "dispatcher.h"
 #include "device.h"
 #include "interrupts.h"
+#include "output.h"
 
 
 template <typename T>
@@ -71,7 +72,7 @@ AuxData::AuxData(const Params& params) {
   // spectra and gain considerable precision in this manner.
   if (params.window && params.baseline && params.window_file == "-" && params.baseline_file == "-") {
     stream = &std::cin;
-    std::cerr << "Reading baseline and window function from stdin." << std::endl;
+    Diagnostics() << "Reading baseline and window function from stdin.\n";
     std::vector<double> values = read_inputfile<double>(stream);
     if ((int)values.size() == 2*params.N) {
       std::size_t const half_size = window_values.size() / 2;
@@ -81,8 +82,8 @@ AuxData::AuxData(const Params& params) {
         else
           baseline_values.push_back(values[i]);
       }
-      std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
-      std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+      Diagnostics() << "Succesfully read " << window_values.size() << " window function points.\n"
+                    << "Succesfully read " << baseline_values.size() << " baseline points.\n";
     }
     else {
       throw RPFexception(
@@ -101,11 +102,11 @@ AuxData::AuxData(const Params& params) {
   else {
     if (params.window) {
       if (params.window_file == "-") {
-        std::cerr << "Reading window function from stdin." << std::endl;
+        Diagnostics() << "Reading window function from stdin.\n";
         stream = &std::cin;
       }
       else {
-        std::cerr << "Reading window function from file " << params.baseline_file << std::endl;
+        Diagnostics() << "Reading window function from file " << params.baseline_file << "\n";
         fs.open(params.window_file);
         if (!fs.good()) {
           throw RPFexception(
@@ -117,7 +118,7 @@ AuxData::AuxData(const Params& params) {
       window_values = read_inputfile<float>(stream);
       // Check for suitability.
       if ((int)window_values.size() == params.N) {
-        std::cerr << "Succesfully read " << window_values.size() << " window function points." << std::endl;
+        Diagnostics() << "Succesfully read " << window_values.size() << " window function points.\n";
       }
       else {
         throw RPFexception(
@@ -128,11 +129,11 @@ AuxData::AuxData(const Params& params) {
     }
     if (params.baseline) {
       if (params.baseline_file == "-") {
-        std::cerr << "Reading baseline from stdin." << std::endl;
+        Diagnostics() << "Reading baseline from stdin.\n";
         stream = &std::cin;
       }
       else {
-        std::cerr << "Reading baseline from file " << params.baseline_file << std::endl;
+        Diagnostics() << "Reading baseline from file " << params.baseline_file << "\n";
         fs.open(params.baseline_file);
         if (!fs.good()) {
           throw RPFexception(
@@ -144,7 +145,7 @@ AuxData::AuxData(const Params& params) {
       baseline_values = read_inputfile<double>(stream);
       // Check for suitability.
       if ((int)baseline_values.size() == params.N) {
-        std::cerr << "Succesfully read " << baseline_values.size() << " baseline points." << std::endl;
+        Diagnostics() << "Succesfully read " << baseline_values.size() << " baseline points.\n";
       }
       else {
         throw RPFexception(
@@ -199,13 +200,16 @@ Plan::Plan(Params& params_, int actual_samplerate_) :
 }
 
 void Plan::print() const {
-    std::cerr << "Number of bins: " << params.N << std::endl;
-    std::cerr << "Total number of (complex) samples to collect: " << (int64_t)params.N*params.repeats << std::endl;
-    std::cerr << "Buffer length: " << params.buf_length << std::endl;
-    std::cerr << "Number of averaged spectra: " << params.repeats << std::endl;
-    std::cerr << "Estimated time of measurements: " << (double)params.N * params.repeats / actual_samplerate << " seconds" << std::endl;
+  Diagnostics diag;
+  diag
+    << "Number of bins: " << params.N << "\n"
+    << "Total number of (complex) samples to collect: " << (int64_t)params.N*params.repeats << "\n"
+    << "Buffer length: " << params.buf_length << "\n"
+    << "Number of averaged spectra: " << params.repeats << "\n"
+    << "Estimated time of measurements: " << (double)params.N * params.repeats / actual_samplerate << " seconds\n";
+
     if (params.strict_time)
-      std::cerr << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds." << std::endl;
+      diag << "Acquisition will unconditionally terminate after " << params.integration_time << " seconds.\n";
 }
 
 
@@ -231,7 +235,7 @@ void Acquisition::run() {
   bool success = false;
   for (int tune_try = 0; !success && tune_try < max_tune_tries; tune_try++)
   {
-    std::cerr << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")" << std::endl;
+    Diagnostics() << "Tuning to " << freq << " Hz (try " << tune_try + 1 << ")\n";
     try {
       rtldev.set_frequency(freq);
       tuned_freq = rtldev.frequency();
@@ -248,12 +252,13 @@ void Acquisition::run() {
     throw TuneError(freq);
   }
 
-  std::cerr << "Device tuned to: " << tuned_freq << " Hz" << std::endl;
   std::fill(pwr.begin(), pwr.end(), 0);
 
   // Record the start-of-acquisition timestamp.
   startAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition started at " << startAcqTimestamp << std::endl;
+
+  Diagnostics() << "Device tuned to: " << tuned_freq << " Hz\n"
+                << "Acquisition started at " << startAcqTimestamp << "\n";
 
   // Calculate the stop time. This will only be effective if --strict-time was given.
   using steady_clock = std::chrono::steady_clock;
@@ -291,7 +296,7 @@ void Acquisition::run() {
     deviceReadouts++;
 
     if (!read_success) {
-      std::cerr << "Error: dropped samples." << std::endl;
+      Diagnostics(LogLevel::Error) << "Error: dropped samples.\n";
       // There is effectively no data in this container - consider it empty.
       // Push the container to the front of the queue because it already has
       // a buffer of the correct size and we'll just pop it again on next
@@ -314,20 +319,26 @@ void Acquisition::run() {
 
   // Record the end-of-acquisition timestamp.
   endAcqTimestamp = currentDateTime();
-  std::cerr << "Acquisition done at " << endAcqTimestamp << std::endl;
+  Diagnostics() << "Acquisition done at " << endAcqTimestamp << "\n";
 
   // Push a sentinel container into the queue to mark the end of acquisition.
   dispatcher.occupiedContainers.push_back({this, nullptr});
 }
 
 void Acquisition::print_summary() const {
-  std::cerr << "Actual number of (complex) samples collected: "
-    << (int64_t)params.N * repeatsProcessed << std::endl;
-  std::cerr << "Actual number of device readouts: " << deviceReadouts << std::endl;
-  std::cerr << "Number of successful readouts: " << successfulReadouts << std::endl;
-  std::cerr << "Actual number of averaged spectra: " << repeatsProcessed << std::endl;
-  std::cerr << "Effective integration time: " <<
-    (double)params.N * repeatsProcessed / actual_samplerate << " seconds" << std::endl;
+  Diagnostics diag;
+  diag << "Actual number of (complex) samples collected: "
+       << (int64_t)params.N * repeatsProcessed << "\n"
+       << "Actual number of device readouts: " << deviceReadouts << "\n"
+       << "Number of successful readouts: " << successfulReadouts << "\n"
+       << "Actual number of averaged spectra: " << repeatsProcessed << "\n"
+       << "Effective integration time: "
+       << (double)params.N * repeatsProcessed / actual_samplerate << " seconds\n";
+
+  diag << "Buffer queue histogram: ";
+  for (auto size : queue_histogram)
+    diag << size << " ";
+  diag << "\n";
 }
 
 void Acquisition::markResultsReady() {
@@ -350,11 +361,4 @@ std::string Acquisition::currentDateTime() {
   char buf[80];
   std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
   return buf;
-}
-
-void Acquisition::printQueueHistogram() const {
-  std::cerr << "Buffer queue histogram: ";
-  for (auto size : queue_histogram)
-    std::cerr << size << " ";
-  std::cerr << std::endl;
 }

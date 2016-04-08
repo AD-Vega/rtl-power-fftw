@@ -21,6 +21,7 @@
 #include <signal.h>
 
 #include "interrupts.h"
+#include "output.h"
 
 std::atomic<int> interrupts(0);
 
@@ -47,9 +48,9 @@ bool checkInterrupt(InterruptState checkLevel) {
     auto state = static_cast<InterruptState>(reportedInterrupts);
 
     if (state == InterruptState::FinishPass)
-      std::cerr << "Interrupted, will try to finish this pass." << std::endl;
+      Diagnostics(LogLevel::Warning) << "Interrupted, will try to finish this pass.\n";
     else if (state == InterruptState::FinishNow)
-      std::cerr << "Interrupted, finishing now." << std::endl;
+      Diagnostics(LogLevel::Warning) << "Interrupted, finishing now.\n";
   }
 
   return currentInterrupts >= static_cast<int>(checkLevel);

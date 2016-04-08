@@ -23,6 +23,7 @@
 #include <tclap/CmdLine.h>
 #include <thread>
 
+#include "output.h"
 #include "params.h"
 #include "exceptions.h"
 
@@ -145,7 +146,8 @@ Params::Params(int argc, char** argv) {
     //Number of bins should be even, to allow us a neat trick to get fftw output properly aligned.
     if (N % 2 != 0) {
       N++;
-      std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
+      Diagnostics(LogLevel::Warning)
+        << "Number of bins should be even, changing to " << N << ".\n";
     }
     gain = arg_gain.getValue();
     sample_rate = arg_rate.getValue();
@@ -162,8 +164,9 @@ Params::Params(int argc, char** argv) {
     // MB range.
     if (buf_length % base_buf != 0) {
       buf_length = floor((double)buf_length/base_buf + 0.5) * base_buf;
-      std::cerr << "Buffer length should be multiple of " << base_buf
-                << ", changing to " << buf_length << "." << std::endl;
+      Diagnostics(LogLevel::Warning)
+        << "Buffer length should be multiple of " << base_buf
+        << ", changing to " << buf_length << ".\n";
     }
     ppm_error = arg_ppm.getValue();
     if (arg_freq.isSet()) {
@@ -223,7 +226,7 @@ Params::Params(int argc, char** argv) {
         ReturnValue::InvalidArgument);
     }
     if (arg_strict_time.isSet() && !arg_integration_time.isSet()) {
-      std::cerr << "Warning: option --strict-time has no effect without --time." << std::endl;
+      Diagnostics(LogLevel::Warning) << "Warning: option --strict-time has no effect without --time.\n";
       strict_time = false;
     }
     //Optimally adjust buffer length for small sample sizes only if buffer length is not user defined.

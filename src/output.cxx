@@ -24,6 +24,7 @@
 #include <iomanip>
 #include <iostream>
 
+
 TextStream::TextStream(const Params& params_, AuxData& aux_) :
   params(params_), aux(aux_)
 {}
@@ -35,11 +36,11 @@ void TextStream::write(Acquisition& acq) {
   const auto& actual_samplerate = acq.actual_samplerate;
 
   // Print the header
-  std::cout << "# rtl-power-fftw output" << std::endl;
-  std::cout << "# Acquisition start: " << acq.startAcqTimestamp << std::endl;
-  std::cout << "# Acquisition end: " << acq.endAcqTimestamp << std::endl;
-  std::cout << "#" << std::endl;
-  std::cout << "# frequency [Hz] power spectral density [dB/Hz]" << std::endl;
+  std::cout << "# rtl-power-fftw output\n";
+  std::cout << "# Acquisition start: " << acq.startAcqTimestamp << "\n";
+  std::cout << "# Acquisition end: " << acq.endAcqTimestamp << "\n";
+  std::cout << "#\n";
+  std::cout << "# frequency [Hz] power spectral density [dB/Hz]\n";
 
   // Calculate the precision needed for displaying the frequency.
   const int extraDigitsFreq = 2;
@@ -56,11 +57,10 @@ void TextStream::write(Acquisition& acq) {
               << " "
               << std::setprecision(significantPlacesPwr)
               << pwrdb
-              << std::endl;
+              << "\n";
   }
   // Separate consecutive spectra with empty lines.
   std::cout << std::endl;
-  std::cout.flush();
 }
 
 
@@ -78,6 +78,24 @@ OutputWriter::~OutputWriter() {
 void OutputWriter::run() {
   while (auto acquisition = queue.get()) {
     acquisition->waitForResultsReady();
+    acquisition->print_summary();
     stream->write(*acquisition);
   }
+}
+
+
+std::mutex Diagnostics::mutex;
+LogLevel Diagnostics::threshold = LogLevel::Info;
+std::ofstream Diagnostics::nullStream;
+
+Diagnostics::~Diagnostics() {
+  if (level < threshold)
+    return;
+
+  std::lock_guard<std::mutex> lock(mutex);
+  std::cerr << buf.str() << std::flush;
+}
+
+void Diagnostics::setThreshold(LogLevel threshold_) {
+  threshold = threshold_;
 }

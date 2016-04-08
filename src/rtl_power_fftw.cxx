@@ -43,11 +43,20 @@ int main(int argc, char **argv)
     // Set up RTL-SDR device.
     Rtlsdr rtldev(params.dev_index);
 
-    // Print the available gains and select the one nearest to the requested gain.
-    rtldev.print_gains();
+    // Print the available gains.
+    auto gain_table = rtldev.gains();
+    Diagnostics() << "Available gains (in 1/10th of dB): ";
+    for (unsigned int i = 0; i < gain_table.size(); i++) {
+      if (i != 0)
+        Diagnostics() << ", ";
+      Diagnostics() << gain_table[i];
+    }
+    Diagnostics() << "\n";
+
+    // Select the gain nearest to the requested gain.
     int gain = rtldev.nearest_gain(params.gain);
-    std::cerr << "Selected nearest available gain: " << gain
-              << " (" << 0.1*gain << " dB)" << std::endl;
+    Diagnostics() << "Selected nearest available gain: " << gain
+                  << " (" << 0.1*gain << " dB)\n";
     rtldev.set_gain(gain);
 
     // Temporarily set the frequency to params.cfreq, just so that the device does not
@@ -62,13 +71,13 @@ int main(int argc, char **argv)
     // Set frequency correction
     if (params.ppm_error != 0) {
       rtldev.set_freq_correction(params.ppm_error);
-      std::cerr << "PPM error set to: " << params.ppm_error << std::endl;
+      Diagnostics() << "PPM error set to: " << params.ppm_error << "\n";
     }
 
     // Set sample rate
     rtldev.set_sample_rate(params.sample_rate);
     int actual_samplerate = rtldev.sample_rate();
-    std::cerr << "Actual sample rate: " << actual_samplerate << " Hz" << std::endl;
+    Diagnostics() << "Actual sample rate: " << actual_samplerate << " Hz\n";
 
     // Create a plan of the operation. This will calculate the number of repeats,
     // adjust the buffer size for optimal performance and create a list of frequency
@@ -98,7 +107,8 @@ int main(int argc, char **argv)
         catch (TuneError &e) {
           // The receiver was unable to tune to this frequency. It might be just a "dead"
           // spot of the receiver. Remove this frequency from the list and continue.
-          std::cerr << "Unable to tune to " << e.frequency() << ". Dropping from frequency list." << std::endl;
+          Diagnostics(LogLevel::Warning)
+            << "Unable to tune to " << e.frequency() << ". Dropping from frequency list.\n";
           iter = plan.freqs_to_tune.erase(iter);
           continue;
         }
@@ -107,8 +117,6 @@ int main(int argc, char **argv)
         // FIXME: acquisition->print_summary();
         // Write the gathered data to stdout.
         writer.queue.push_back(acquisition);
-        // Print the histogram of the buffer queue length to stderr.
-        acquisition->printQueueHistogram();
 
         // Check for interrupts.
         if (checkInterrupt(InterruptState::FinishNow))
@@ -129,7 +137,7 @@ int main(int argc, char **argv)
     }
   }
   catch (RPFexception &exception) {
-    std::cerr << exception.what() << std::endl;
+    Diagnostics(LogLevel::Error) << exception.what() << "\n";
     final_retval = exception.returnValue();
   }
 

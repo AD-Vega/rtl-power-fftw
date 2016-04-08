@@ -151,13 +151,4 @@ int Rtlsdr::nearest_gain(int gain) const {
 }
 
 void Rtlsdr::print_gains() const {
-  auto gain_table = gains();
-
-  std::cerr << "Available gains (in 1/10th of dB): ";
-  for (unsigned int i = 0; i < gain_table.size(); i++) {
-    if (i != 0)
-      std::cerr << ", ";
-    std::cerr << gain_table[i];
-  }
-  std::cerr << std::endl;
 }
