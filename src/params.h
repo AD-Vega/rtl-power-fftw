@@ -54,6 +54,7 @@ public:
   //It is senseless to waste a full buffer of data unless instructed to do so.
   int64_t repeats = buf_length/(2*N);
   int threads = 1;
+  std::string outputFile;
 };
 
 #endif // PARAMS_H

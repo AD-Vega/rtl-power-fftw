@@ -27,7 +27,22 @@
 
 TextStream::TextStream(const Params& params_, AuxData& aux_) :
   params(params_), aux(aux_)
-{}
+{
+  if (params.outputFile.empty()) {
+    stream = &std::cout;
+  }
+  else {
+    fstream.reset(new std::ofstream(params.outputFile));
+    if (*fstream) {
+      stream = fstream.get();
+    }
+    else {
+      throw RPFexception(
+        "Could not open " + params.outputFile + " for writing.",
+        ReturnValue::InvalidArgument);
+    }
+  }
+}
 
 void TextStream::write(Acquisition& acq) {
   // A few shorthands to save us some typing.
@@ -36,11 +51,11 @@ void TextStream::write(Acquisition& acq) {
   const auto& actual_samplerate = acq.actual_samplerate;
 
   // Print the header
-  std::cout << "# rtl-power-fftw output\n";
-  std::cout << "# Acquisition start: " << acq.startAcqTimestamp << "\n";
-  std::cout << "# Acquisition end: " << acq.endAcqTimestamp << "\n";
-  std::cout << "#\n";
-  std::cout << "# frequency [Hz] power spectral density [dB/Hz]\n";
+  *stream << "# rtl-power-fftw output\n"
+          << "# Acquisition start: " << acq.startAcqTimestamp << "\n"
+          << "# Acquisition end: " << acq.endAcqTimestamp << "\n"
+          << "#\n"
+          << "# frequency [Hz] power spectral density [dB/Hz]\n";
 
   // Calculate the precision needed for displaying the frequency.
   const int extraDigitsFreq = 2;
@@ -52,23 +67,20 @@ void TextStream::write(Acquisition& acq) {
     double freq = tuned_freq + (i - params.N/2.0) * actual_samplerate / params.N;
     double pwrdb = 10*log10(pwr[i] / acq.repeatsProcessed / params.N / actual_samplerate)
                    - (params.baseline ? aux.baseline_values[i] : 0);
-    std::cout << std::setprecision(significantPlacesFreq)
-              << freq
+    *stream << std::setprecision(significantPlacesFreq) << freq
               << " "
-              << std::setprecision(significantPlacesPwr)
-              << pwrdb
+              << std::setprecision(significantPlacesPwr) << pwrdb
               << "\n";
   }
   // Separate consecutive spectra with empty lines.
-  std::cout << std::endl;
+  *stream << std::endl;
 }
 
 void TextStream::writeDelimiter() {
   // Measurement sets are delimited with two empty lines. One of them was already
   // printed as a part of the last result.
-  std::cout << std::endl;
+  *stream << std::endl;
 }
-
 
 
 OutputWriter::OutputWriter(OutputStream* stream_) :

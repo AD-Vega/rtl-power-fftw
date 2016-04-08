@@ -49,6 +49,8 @@ public:
 protected:
   const Params& params;
   const AuxData& aux;
+  std::ostream* stream;
+  std::unique_ptr<std::ofstream> fstream;
 };
 
 

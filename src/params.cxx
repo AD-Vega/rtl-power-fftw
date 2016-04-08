@@ -118,6 +118,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_quiet );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
+    TCLAP::ValueArg<std::string> arg_output_file("O","output","Output file.",false,"","file");
+    cmd.add( arg_output_file );
     TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
     cmd.add( arg_min_overlap );
     TCLAP::ValueArg<int64_t> arg_repeats("n","repeats","Number of scans for averaging (incompatible with -t).",false,repeats,"repeats");
@@ -249,6 +251,8 @@ Params::Params(int argc, char** argv) {
     window = arg_window.isSet();
     if (window)
       window_file = arg_window.getValue();
+
+    outputFile = arg_output_file.getValue();
 
     if (arg_threads.isSet()) {
       threads = arg_threads.getValue();
