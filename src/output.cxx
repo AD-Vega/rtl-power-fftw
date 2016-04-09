@@ -105,8 +105,8 @@ void OutputWriter::run() {
   while (auto message = queue.get()) {
     if (message.command == Message::Command::WriteData) {
       message.acquisition->waitForResultsReady();
-      message.acquisition->printSummary();
       stream->write(*message.acquisition);
+      message.acquisition->printSummary();
     }
     if (message.command == Message::Command::WriteDelimiter) {
       stream->writeDelimiter();
