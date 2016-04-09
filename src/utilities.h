@@ -20,6 +20,7 @@
 #ifndef UTILITIES_H
 #define UTILITIES_H
 
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 
@@ -62,5 +63,12 @@ protected:
   std::condition_variable event;
   std::deque<T> queue;
 };
+
+
+using Timestamp = std::chrono::time_point<std::chrono::system_clock>;
+
+// A helper function that returns the current date and time in the format
+// "YYYY-MM-DD HH:mm:ss UTC".
+std::string timeString(Timestamp& timestamp);
 
 #endif // UTILITIES_H

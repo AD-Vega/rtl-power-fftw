@@ -20,6 +20,8 @@
 #ifndef ACQUISITION_H
 #define ACQUISITION_H
 
+#include "utilities.h"
+
 #include <atomic>
 #include <condition_variable>
 #include <exception>
@@ -107,9 +109,9 @@ public:
   // The actual frequency returned by the device.
   int tuned_freq;
   // Timestamp for the start of the acquisition.
-  std::string startAcqTimestamp;
+  Timestamp startAcqTimestamp;
   // Timestamp for the end of the acquisition.
-  std::string endAcqTimestamp;
+  Timestamp endAcqTimestamp;
   // Number of device readouts.
   int64_t deviceReadouts = 0;
   // Number of successful readouts (i.e., with no dropped samples).
@@ -118,9 +120,6 @@ public:
 
 
 protected:
-  // A helper function that returns the current date and time in the format
-  // "YYYY-MM-DD HH:mm:ss UTC".
-  static std::string currentDateTime();
   void markResultsReady();
 
   const Params& params;

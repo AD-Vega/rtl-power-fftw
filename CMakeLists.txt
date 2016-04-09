@@ -34,10 +34,11 @@ add_executable(rtl_power_fftw
   src/acquisition.cxx
   src/dispatcher.cxx
   src/device.cxx
+  src/fft_worker.cxx
   src/interrupts.cxx
   src/params.cxx
-  src/fft_worker.cxx
   src/output.cxx
+  src/utilities.cxx
   src/rtl_power_fftw.cxx
 )
 

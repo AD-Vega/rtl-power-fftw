@@ -52,8 +52,8 @@ void TextStream::write(Acquisition& acq) {
 
   // Print the header
   *stream << "# rtl-power-fftw output\n"
-          << "# Acquisition start: " << acq.startAcqTimestamp << "\n"
-          << "# Acquisition end: " << acq.endAcqTimestamp << "\n"
+          << "# Acquisition start: " << timeString(acq.startAcqTimestamp) << "\n"
+          << "# Acquisition end: " << timeString(acq.endAcqTimestamp) << "\n"
           << "#\n"
           << "# frequency [Hz] power spectral density [" << units << "]\n";
 

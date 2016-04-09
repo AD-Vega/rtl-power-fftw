@@ -258,11 +258,11 @@ void Acquisition::run() {
   std::fill(pwr.begin(), pwr.end(), 0);
 
   // Record the start-of-acquisition timestamp.
-  startAcqTimestamp = currentDateTime();
+  startAcqTimestamp = std::chrono::system_clock::now();
 
   Diagnostics(LogLevel::Operation)
     << "Device tuned to: " << tuned_freq << " Hz\n"
-    << "Acquisition started at " << startAcqTimestamp << "\n";
+    << "Acquisition started at " << timeString(startAcqTimestamp) << "\n";
 
   // Calculate the stop time. This will only be effective if --strict-time was given.
   using steady_clock = std::chrono::steady_clock;
@@ -322,8 +322,9 @@ void Acquisition::run() {
   }
 
   // Record the end-of-acquisition timestamp.
-  endAcqTimestamp = currentDateTime();
-  Diagnostics(LogLevel::Operation) << "Acquisition done at " << endAcqTimestamp << "\n";
+  endAcqTimestamp = std::chrono::system_clock::now();
+  Diagnostics(LogLevel::Operation)
+    << "Acquisition done at " << timeString(endAcqTimestamp) << "\n";
 
   // Push a sentinel container into the queue to mark the end of acquisition.
   dispatcher.occupiedContainers.push_back({this, nullptr});
@@ -367,12 +368,4 @@ double Acquisition::frequency(size_t index) {
 void Acquisition::waitForResultsReady() const {
   std::unique_lock<std::mutex> lock(mutex);
   event.wait(lock, [this]{ return resultsReady; });
-}
-
-// Get current date/time, format is "YYYY-MM-DD HH:mm:ss UTC"
-std::string Acquisition::currentDateTime() {
-  time_t now = std::time(0);
-  char buf[80];
-  std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
-  return buf;
 }
