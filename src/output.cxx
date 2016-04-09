@@ -18,7 +18,10 @@
 */
 
 #include "output.h"
+
 #include "acquisition.h"
+#include "exceptions.h"
+#include "params.h"
 
 #include <cmath>
 #include <iomanip>

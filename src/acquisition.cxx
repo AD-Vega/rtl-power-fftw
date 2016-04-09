@@ -17,18 +17,21 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "acquisition.h"
+
+#include "device.h"
+#include "exceptions.h"
+#include "dispatcher.h"
+#include "interrupts.h"
+#include "output.h"
+#include "params.h"
+
 #include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <thread>
-
-#include "acquisition.h"
-#include "dispatcher.h"
-#include "device.h"
-#include "interrupts.h"
-#include "output.h"
 
 
 template <typename T>

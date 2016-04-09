@@ -16,18 +16,19 @@
 * You should have received a copy of the GNU General Public License
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
+
 #include "acquisition.h"
-#include "dispatcher.h"
 #include "device.h"
+#include "dispatcher.h"
 #include "exceptions.h"
 #include "interrupts.h"
-#include "params.h"
 #include "output.h"
+#include "params.h"
 
 #include <chrono>
 #include <iostream>
-#include <rtl-sdr.h>
 #include <memory>
+#include <rtl-sdr.h>
 #include <thread>
 
 

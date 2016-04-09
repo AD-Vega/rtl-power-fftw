@@ -21,6 +21,7 @@
 #define OUTPUT_H
 
 #include "utilities.h"
+
 #include <fstream>
 #include <iostream>
 #include <memory>

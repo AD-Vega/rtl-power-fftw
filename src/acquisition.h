@@ -28,8 +28,8 @@
 #include <vector>
 #include <rtl-sdr.h>
 
-#include "params.h"
-#include "device.h"
+class Params;
+class Rtlsdr;
 
 // This object contains data obtained from external sources.
 class AuxData {

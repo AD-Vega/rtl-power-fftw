@@ -17,15 +17,17 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "params.h"
+
+#include "exceptions.h"
+#include "output.h"
+
 #include <iostream>
 #include <list>
 #include <string>
 #include <tclap/CmdLine.h>
 #include <thread>
 
-#include "output.h"
-#include "params.h"
-#include "exceptions.h"
 
 int parse_frequency(std::string s) {
   std::istringstream ss(s);

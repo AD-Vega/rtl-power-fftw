@@ -21,7 +21,6 @@
 #define PARAMS_H
 
 #include <string>
-#include "exceptions.h"
 
 const int base_buf = 16384;
 const int default_buf_multiplier = 100;

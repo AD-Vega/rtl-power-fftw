@@ -20,13 +20,16 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
+#include "device.h"
 #include "utilities.h"
 
 #include <atomic>
 #include <deque>
+#include <list>
 #include <thread>
 
 class Params;
+class AuxData;
 class Acquisition;
 
 struct DataContainer {

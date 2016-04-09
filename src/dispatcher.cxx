@@ -17,12 +17,13 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "acquisition.h"
 #include "dispatcher.h"
+
+#include "acquisition.h"
 #include "fft_worker.h"
+#include "params.h"
 
 #include <iostream>
-#include <bits/algorithmfwd.h>
 
 
 Dispatcher::Dispatcher(const Params& params_, const AuxData& aux_) :

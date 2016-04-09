@@ -20,12 +20,14 @@
 #ifndef FFT_WORKER_H
 #define FFT_WORKER_H
 
-#include "dispatcher.h"
-
 #include <complex>
+#include <condition_variable>
 #include <fftw3.h>
 #include <mutex>
 #include <thread>
+
+class Acquisition;
+class Dispatcher;
 
 using complex = std::complex<float>;
 

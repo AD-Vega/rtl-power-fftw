@@ -17,9 +17,11 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "fft_worker.h"
+
 #include "acquisition.h"
 #include "dispatcher.h"
-#include "fft_worker.h"
+#include "params.h"
 
 std::mutex FFTWorker::fftwMutex;
 

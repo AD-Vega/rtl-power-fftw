@@ -20,8 +20,8 @@
 #ifndef RTL_H
 #define RTL_H
 
-#include <vector>
 #include <rtl-sdr.h>
+#include <vector>
 
 using RawBuffer = std::vector<uint8_t>;
 
