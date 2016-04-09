@@ -98,6 +98,7 @@ public:
   // Print a summary of the acquisition (number of samples collected, number of
   // device readouts etc.) to stderr.
   void printSummary() const;
+  // Block until all the data has been processed and the final result is ready.
   void waitForResultsReady() const;
   // Convenience function: returns the frequency of the specified FFT bin.
   double frequency(size_t index);
@@ -116,22 +117,45 @@ public:
   int64_t deviceReadouts = 0;
   // Number of successful readouts (i.e., with no dropped samples).
   int64_t successfulReadouts = 0;
+  // Number of added spectra.
   int64_t repeatsProcessed;
 
 
 protected:
+  // This function must be called after all the FFT operations are done. The
+  // accumulated data is then finalized (normalization, baseline subtraction)
+  // and an announcement to any waiting threads (see waitForResultsReady()) is
+  // made.
   void markResultsReady();
 
+  // Internal reference to params.
   const Params& params;
+  // Internal reference to auxiliary data.
   AuxData& aux;
+  // For access to the RTL device.
   Rtlsdr& rtldev;
+  // A reference to the dispatcher (for submitting the acquired data).
   Dispatcher& dispatcher;
   // The frequency to tune to in this acquisition.
   int freq;
+  // Queue histogram: each time an unoccupied buffer is requested from the
+  // dispatcher, the queue length is recorded and the corresponding bin in this
+  // histogram is increased by one. This serves as an indication of the buffer
+  // availability.
   std::vector<int> queue_histogram;
+  // The total number of spectra submitted to the FFT workers. Only one external
+  // update to this value is made by the dispatcher, and that is at the moment
+  // when the dispatcher is signalled that no further data is arriving for this
+  // acquisition. Very careful treatment of this value is necessary to avoid
+  // race conditions! See code for details.
   std::atomic<int64_t> repeatsToProcess;
+  // A mutex that protects the 'event' condition variable and the 'resultsReady'
+  // flag.
   mutable std::mutex mutex;
+  // All threads waiting on this condition variable will be notified when the
+  // processed and finalized results of the acquisition are ready.
   mutable std::condition_variable event;
+  // True if the results are ready.
   bool resultsReady = false;
 
   friend class Dispatcher;

@@ -29,24 +29,30 @@
 Dispatcher::Dispatcher(const Params& params_, const AuxData& aux_) :
   params(params_), aux(aux_)
 {
+  // Create a set of raw buffers.
   for (int i = 0; i < params.buffers; i++) {
+    // Create a new buffer (as a member of a list).
     rawBuffers.emplace_back(params.buf_length);
+    // Create an empty container with a pointer to the newly created buffer.
     emptyContainers.push_back({nullptr, &rawBuffers.back()});
   }
 
+  // Create the FFT workers and add them to the queue of idle workers.
   for (int i = 0; i < params.threads; i++) {
     auto worker = new FFTWorker(*this);
     workers.push_back(worker);
     idleWorkers.push_back(worker);
   }
 
+  // Run the dispatching and accumulating operations.
   dispatchingThread = std::thread(&Dispatcher::dispatchingOperation, this);
   accumulatingThread = std::thread(&Dispatcher::accumulatingOperation, this);
 }
 
 Dispatcher::~Dispatcher() {
-  // Stop dispatching the data to workers. A nullptr in the buffer queue denotes
-  // the end of the data stream and causes the dispatching thread to terminate.
+  // Stop dispatching the data to workers. A container with a pointer to a null
+  // acquisition denotes the end of the data stream and causes the dispatching
+  // thread to terminate.
   occupiedContainers.push_back({nullptr, nullptr});
   dispatchingThread.join();
 
@@ -56,12 +62,14 @@ Dispatcher::~Dispatcher() {
     delete worker;
 
   // Queue a nullptr to notify the accumulating thread that there are no workers
-  // left.
+  // left. The accumulating thread terminates upon receiving this message.
   finishedWorkers.push_back(nullptr);
   accumulatingThread.join();
 }
 
 void Dispatcher::workerFinished(FFTWorker* worker) {
+  // A worker has finished its job. Queue it so that it will be dealt with by the
+  // accumulating operation.
   finishedWorkers.push_back(worker);
 }
 
@@ -69,12 +77,18 @@ void Dispatcher::dispatchingOperation() {
   DataContainer container;
   FFTWorker* worker = nullptr;
 
+  // An index into the data buffer.
   unsigned int buffer_index = 0;
+  // An index into the current worker's input buffer.
   int fft_index = 0;
+  // The total number of repeats from the current acquisition that have been 
+  // submitted for processing.
   int64_t totalRepeats = 0;
   bool newAcquisition = true;
 
   while (true) {
+    // See if we have to fetch a new container. Otherwise we'll just continue
+    // copying the data from the current one.
     if (!container.acquisition) {
       container = occupiedContainers.get();
 
@@ -91,6 +105,7 @@ void Dispatcher::dispatchingOperation() {
         // been processed. Use an atomic fetch_add operation to avoid racing
         // with the accumulating thread.
         auto repeatsToProcess = container.acquisition->repeatsToProcess.fetch_add(totalRepeats);
+        // repeatsToProcess contains the value before addition.
         repeatsToProcess += totalRepeats;
         if (repeatsToProcess == 0) {
           // All the data has been processed. Mark the results as ready.
@@ -128,6 +143,7 @@ void Dispatcher::dispatchingOperation() {
     }
 
     if (!worker) {
+      // No worker assigned yet. Get an idle one.
       worker = idleWorkers.get();
       worker->acquisition = container.acquisition;
       fft_index = 0;
@@ -136,21 +152,27 @@ void Dispatcher::dispatchingOperation() {
     auto& data = *container.data;
     const auto dataSize = data.size();
 
+    // Copy the data to the worker's input buffer until either the worker's input
+    // buffer is full or we run out of data to copy.
     while (fft_index < params.N && buffer_index < dataSize) {
-      //The magic aligment happens here: we have to change the phase of each next complex sample
-      //by pi - this means that even numbered samples stay the same while odd numbered samples
-      //get multiplied by -1 (thus rotated by pi in complex plane).
-      //This gets us output spectrum shifted by half its size - just what we need to get the output right.
+      // The "magic aligment" happens here: we change the phase of every second
+      // complex sample by pi - this means that even-numbered samples stay the same
+      // while odd-numbered samples get multiplied by -1 (thus rotated by pi in the
+      // complex plane). This gets us an output spectrum shifted by half if its size
+      // so that the DC component is in the middle.
       const float multiplier = (fft_index % 2 == 0 ? 1 : -1);
       complex bfr_val(data[buffer_index], data[buffer_index+1]);
       worker->inbuf[fft_index] = (bfr_val - complex(127.0, 127.0)) * multiplier;
+
       if (params.window)
         worker->inbuf[fft_index] *= aux.window_values[fft_index];
-      buffer_index += 2;
+
+      buffer_index += 2; // Two bytes per complex sample.
       fft_index++;
     }
 
     if (fft_index == params.N) {
+      // The worker's input buffer is full. Start the FFT.
       totalRepeats++;
       worker->startFFT();
       worker = nullptr;
@@ -168,10 +190,14 @@ void Dispatcher::accumulatingOperation()
 {
   FFTWorker* worker;
 
+  // The loop runs until a nullptr is fetched instead of a pointer to a worker.
   while ((worker = finishedWorkers.get()) != nullptr) {
     auto acquisition = worker->acquisition;
     auto outbuf = worker->outbuf;
 
+    // Add the results to the acquisition's accumulator. There is no need for
+    // locking as this is the only thread that is allowed to access the
+    // accumulator before the results are marked as ready.
     for (int i = 0; i < params.N; i++) {
       acquisition->pwr[i] += pow(outbuf[i].real(), 2) + pow(outbuf[i].imag(), 2);
     }
@@ -179,6 +205,13 @@ void Dispatcher::accumulatingOperation()
     idleWorkers.push_back(worker);
     acquisition->repeatsProcessed++;
 
+    // When the dispatcher determines the total number of spectra passed off to
+    // workers, it will atomically add that number to acquisition->repeatsToProcess
+    // and check if the result is zero. If it is, it will mark the results as ready.
+    // If it isn't, all the workers have not yet finished their job and this thread
+    // is the one that will later mark the results as ready. It is important that
+    // this marking only happens in one thread because once markResultsReady() is
+    // called, the state of the Acquisition object immediately becomes indeterminate.
     if (--(acquisition->repeatsToProcess) == 0) {
       // All the data has been processed. Mark the results as ready.
       acquisition->markResultsReady();

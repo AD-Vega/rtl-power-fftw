@@ -32,14 +32,17 @@ TextStream::TextStream(const Params& params_, AuxData& aux_) :
   params(params_), aux(aux_)
 {
   if (params.outputFile.empty()) {
+    // No output file specified. Use stdout.
     stream = &std::cout;
   }
   else {
+    // Output file given. Try to open it.
     fstream.reset(new std::ofstream(params.outputFile));
     if (*fstream) {
       stream = fstream.get();
     }
     else {
+      // Could not open the file.
       throw RPFexception(
         "Could not open " + params.outputFile + " for writing.",
         ReturnValue::InvalidArgument);
@@ -88,6 +91,7 @@ void TextStream::datasetEnd() {
 OutputWriter::OutputWriter(OutputStream* stream_) :
   stream(stream_)
 {
+  // Run the writing thread.
   thread = std::thread(&OutputWriter::run, this);
 }
 
@@ -109,10 +113,13 @@ void OutputWriter::datasetEnd() {
 }
 
 void OutputWriter::run() {
+  // The loop will run until a message with the Quit command is received.
   while (auto message = queue.get()) {
     if (message.command == Message::Command::WriteData) {
+      // The data treatment is not necessarily finished yet.
       message.acquisition->waitForResultsReady();
       stream->write(*message.acquisition);
+      // Print a diagnostic summary after writing the data.
       message.acquisition->printSummary();
     }
     else if (message.command == Message::Command::DatasetBegin) {
@@ -130,9 +137,11 @@ LogLevel Diagnostics::threshold = LogLevel::Operation;
 std::ofstream Diagnostics::nullStream;
 
 Diagnostics::~Diagnostics() {
+  // Don't do anything if the logging level is below the threshold.
   if (level < threshold)
     return;
 
+  // Lock the mutex, dump the message to stderr and flush it.
   std::lock_guard<std::mutex> lock(mutex);
   std::cerr << buf.str() << std::flush;
 }

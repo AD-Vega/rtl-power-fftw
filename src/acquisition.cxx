@@ -203,6 +203,9 @@ Plan::Plan(Params& params_, int actual_samplerate_) :
 }
 
 void Plan::print() const {
+  // Construct a Diagnostics object in order to keep the whole message in one piece.
+  // The entire message will be written to output when this object is destroyed (i.e.,
+  // at the end of the function).
   Diagnostics diag;
   diag
     << "Number of bins: " << params.N << "\n"
@@ -222,8 +225,9 @@ Acquisition::Acquisition(const Params& params_,
                          Dispatcher& dispatcher_,
                          int actual_samplerate_,
                          int freq_) :
-  pwr(params_.N), actual_samplerate(actual_samplerate_), params(params_), aux(aux_), rtldev(rtldev_), dispatcher(dispatcher_),
-  freq(freq_), queue_histogram(params.buffers+1, 0)
+  pwr(params_.N), actual_samplerate(actual_samplerate_), params(params_),
+  aux(aux_), rtldev(rtldev_), dispatcher(dispatcher_), freq(freq_),
+  queue_histogram(params.buffers+1, 0)
 { }
 
 
@@ -331,6 +335,9 @@ void Acquisition::run() {
 }
 
 void Acquisition::printSummary() const {
+  // Construct a Diagnostics object in order to keep the whole message in one piece.
+  // The entire message will be written to output when this object is destroyed (i.e.,
+  // at the end of the function).
   Diagnostics diag(LogLevel::Operation);
   diag << "Actual number of (complex) samples collected: "
        << (int64_t)params.N * repeatsProcessed << "\n"
@@ -350,15 +357,16 @@ void Acquisition::markResultsReady() {
   // Finalize the result: interpolate the central point to cancel DC bias.
   pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
-  // Normalize and subtract baseline.
+  // Normalize the data and subtract baseline.
   for (size_t i = 0; i < params.N; i++) {
     pwr[i] = (pwr[i] / repeatsProcessed / params.N / actual_samplerate)
              - (params.baseline ? aux.baseline_values[i] : 0);
   }
 
+  // Announce that the data is ready.
   std::lock_guard<std::mutex> guard(mutex);
   resultsReady = true;
-  event.notify_one();
+  event.notify_all();
 }
 
 double Acquisition::frequency(size_t index) {

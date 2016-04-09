@@ -24,26 +24,32 @@
 #include <condition_variable>
 #include <deque>
 
+// A concurrent queue for an arbitrary data type. It is used as an interface for
+// passing messages and data between the program threads.
 template <typename T>
 class ConcurrentQueue {
 public:
+  // Push an element to the back of the queue.
   void push_back(T item) {
     std::lock_guard<std::mutex> queueLock(mutex);
     queue.push_back(item);
     event.notify_one();
   }
 
+  // Push an element to the front of the queue.
   void push_front(T item) {
     std::lock_guard<std::mutex> queueLock(mutex);
     queue.push_front(item);
     event.notify_one();
   }
 
+  // Fetch an element from the front of the queue.
   T get() {
     std::unique_lock<std::mutex> queueLock(mutex);
     return getItem(queueLock);
   }
 
+  // A variation on the get() method that also reports the initial queue length.
   T get(size_t& queueSize) {
     std::unique_lock<std::mutex> queueLock(mutex);
     queueSize = queue.size();
@@ -59,12 +65,16 @@ protected:
     return item;
   }
 
+  // A mutex that protects the access to the underlying deque.
   std::mutex mutex;
+  // Used to notify the threads of a queue event (get, push).
   std::condition_variable event;
+  // The actual queue.
   std::deque<T> queue;
 };
 
 
+// An abbreviation for the timestamp type.
 using Timestamp = std::chrono::time_point<std::chrono::system_clock>;
 
 // A helper function that returns the current date and time in the format

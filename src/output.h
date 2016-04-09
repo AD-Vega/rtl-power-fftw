@@ -33,6 +33,10 @@ class Params;
 class AuxData;
 
 
+// Class OutputStream is an interface through which new output formats can be
+// added in a modular way. To use a particular format, implement the interface
+// functions in a new class inheriting from OutputStream, create an instance of
+// that class and pass a pointer to the instance to OutputWriter.
 class OutputStream {
 public:
   virtual ~OutputStream() {};
@@ -46,6 +50,10 @@ public:
 };
 
 
+// A text-based output stream that can write to either stdout or a file. The
+// output contains a simple header preceding each spectrum. Consecutive spectra
+// are separated by a single blank line and measurement sets are separated by
+// two blank lines. This format is directly suitable as an input to gnuplot.
 class TextStream : public OutputStream {
 public:
   TextStream(const Params& params, AuxData& aux);
@@ -56,13 +64,19 @@ public:
 protected:
   const Params& params;
   const AuxData& aux;
+  // A pointer to the output stream (either stdout or a file).
   std::ostream* stream;
+  // A unique_ptr to a file stream (if needed).
   std::unique_ptr<std::ofstream> fstream;
 };
 
 
+// An instance of this class runs a separate thread that receives finalized
+// data from an acquisition and serializes it in a particular format.
 class OutputWriter {
 public:
+  // The argument 'stream' can be a pointer to any object that implements the
+  // OutputStream interface.
   OutputWriter(OutputStream* stream);
   ~OutputWriter();
 
@@ -73,11 +87,15 @@ public:
   OutputWriter& operator=(const OutputWriter&) = delete;
   OutputWriter& operator=(const OutputWriter&&) = delete;
 
+  // Mark the beginning of a data set.
   void datasetBegin();
+  // Mark the end of a data set.
   void datasetEnd();
+  // Queue the data to be written.
   void queueData(std::shared_ptr<Acquisition> acquisition);
 
 protected:
+  // The function that runs in a separate thread.
   void run();
 
   // A message that can be passed to the writing thread.
@@ -104,18 +122,22 @@ protected:
     std::shared_ptr<Acquisition> acquisition;
   };
 
+  // The queue through which the writing thread receives notifications.
   ConcurrentQueue<Message> queue;
+  // The output stream.
   OutputStream* stream;
+  // The thread object in which run() gets invoked.
   std::thread thread;
 };
 
 
+// Loggin levels of diagnostic messages.
 enum class LogLevel {
-  Debug,
-  Operation,
-  Info,
-  Warning,
-  Error
+  Debug, // Debug messages.
+  Operation, // Messages that get repeated with every acquisition.
+  Info, // Messages that (more or less) appear once per program run.
+  Warning, // For conditions that affect, but don't terminate, the operation.
+  Error // For conditions that cause the program to terminate.
 };
 
 

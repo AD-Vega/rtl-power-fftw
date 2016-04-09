@@ -40,11 +40,13 @@ FFTWorker::FFTWorker(Dispatcher& dispatcher_) :
                             FFTW_FORWARD, FFTW_MEASURE);
   }
 
+  // Start the worker thread.
   fftThread = std::thread(&FFTWorker::fftOperation, this);
 }
 
 FFTWorker::~FFTWorker() {
   {
+    // Ask the worker thread to terminate.
     std::lock_guard<std::mutex> controlLock(controlMutex);
     doExit = true;
     controlEvent.notify_one();
@@ -68,14 +70,18 @@ void FFTWorker::startFFT() {
 void FFTWorker::fftOperation() {
   std::unique_lock<std::mutex> controlLock(controlMutex);
   while (!doExit) {
+    // Block until an event is signalled.
     while (!doFFT && !doExit)
       controlEvent.wait(controlLock);
 
     if (doExit)
       break;
 
+    // Perform the FFT.
     fftwf_execute(plan);
     doFFT = false;
+
+    // Notify the dispatcher.
     dispatcher.workerFinished(this);
   }
 }
