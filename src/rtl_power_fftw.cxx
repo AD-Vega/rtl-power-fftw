@@ -101,6 +101,7 @@ int main(int argc, char **argv)
 
     //Read from device and do FFT
     do {
+      writer.datasetBegin();
       for (auto iter = plan.freqs_to_tune.begin(); iter != plan.freqs_to_tune.end();) {
         // Begin a new data acquisition.
         auto acquisition = std::make_shared<Acquisition>(
@@ -127,7 +128,7 @@ int main(int argc, char **argv)
           break;
       }
       // Mark the end of a measurement set.
-      writer.queueDelimiter();
+      writer.datasetEnd();
 
       // Loop if continuous mode or session duration is set, but quit if the frequency
       // list becomes empty, if the user interrupts the operation or if the session time

@@ -78,7 +78,7 @@ void TextStream::write(Acquisition& acq) {
   *stream << std::endl;
 }
 
-void TextStream::writeDelimiter() {
+void TextStream::datasetEnd() {
   // Measurement sets are delimited with two empty lines. One of them was already
   // printed as a part of the last result.
   *stream << std::endl;
@@ -100,8 +100,12 @@ void OutputWriter::queueData(std::shared_ptr<Acquisition> acquisition) {
   queue.push_back({Message::Command::WriteData, acquisition});
 }
 
-void OutputWriter::queueDelimiter() {
-  queue.push_back(Message::Command::WriteDelimiter);
+void OutputWriter::datasetBegin() {
+  queue.push_back(Message::Command::DatasetBegin);
+}
+
+void OutputWriter::datasetEnd() {
+  queue.push_back(Message::Command::DatasetEnd);
 }
 
 void OutputWriter::run() {
@@ -111,8 +115,11 @@ void OutputWriter::run() {
       stream->write(*message.acquisition);
       message.acquisition->printSummary();
     }
-    if (message.command == Message::Command::WriteDelimiter) {
-      stream->writeDelimiter();
+    else if (message.command == Message::Command::DatasetBegin) {
+      stream->datasetBegin();
+    }
+    else if (message.command == Message::Command::DatasetEnd) {
+      stream->datasetEnd();
     }
   }
 }

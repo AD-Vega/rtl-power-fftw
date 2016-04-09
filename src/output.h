@@ -36,16 +36,22 @@ class AuxData;
 class OutputStream {
 public:
   virtual ~OutputStream() {};
+
+  // Called before a frequency scan begins.
+  virtual void datasetBegin() = 0;
+  // Called after a frequency scan ends.
+  virtual void datasetEnd() = 0;
+  // Called after every acquisition.
   virtual void write(Acquisition& acquisition) = 0;
-  virtual void writeDelimiter() = 0;
 };
 
 
 class TextStream : public OutputStream {
 public:
   TextStream(const Params& params, AuxData& aux);
+  void datasetBegin() { /* no-op */ }
+  void datasetEnd();
   void write(Acquisition& acquisition);
-  void writeDelimiter();
 
 protected:
   const Params& params;
@@ -67,8 +73,9 @@ public:
   OutputWriter& operator=(const OutputWriter&) = delete;
   OutputWriter& operator=(const OutputWriter&&) = delete;
 
+  void datasetBegin();
+  void datasetEnd();
   void queueData(std::shared_ptr<Acquisition> acquisition);
-  void queueDelimiter();
 
 protected:
   void run();
@@ -78,8 +85,9 @@ protected:
   struct Message {
     // Possible commands.
     enum class Command {
+      DatasetBegin,
+      DatasetEnd,
       WriteData,
-      WriteDelimiter,
       Quit
     };
 
