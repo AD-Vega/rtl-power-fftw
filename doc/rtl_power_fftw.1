@@ -98,6 +98,12 @@ Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
 .RS
 .RE
 .TP
+.B \f[C]\-H\ <number>\f[], \f[C]\-\-threads\ <number>\f[]
+The number of concurrent threads for FFT.
+The default is to use one thread per CPU core.
+.RS
+.RE
+.TP
 .B \f[C]\-l\f[], \f[C]\-\-linear\f[]
 Output linear power values instead of logarithmic.
 .RS
@@ -111,6 +117,12 @@ Number of spectra to average (incompatible with \f[C]\-t\f[]).
 .B \f[C]\-o\ <percent>\f[], \f[C]\-\-overlap\ <percent>\f[]
 Define lower boundary for overlap when frequency hopping (otherwise
 meaningless).
+.RS
+.RE
+.TP
+.B \f[C]\-O\ <file>\f[], \f[C]\-\-output\ <file>\f[]
+The output file.
+If this option is not given, the output is written to stdout.
 .RS
 .RE
 .TP

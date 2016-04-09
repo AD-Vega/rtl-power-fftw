@@ -44,6 +44,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-g <1/10th of dB>`,  `--gain <1/10th of dB>`
 :   Receiver gain, expressed in tenths of a decibel (e.g., 100 means 10 dB).
 
+`-H <number>`,  `--threads <number>`
+:   The number of concurrent threads for FFT. The default is to use one thread per CPU core.
+
 `-l`,  `--linear`
 :   Output linear power values instead of logarithmic.
 
@@ -52,6 +55,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 
 `-o <percent>`,  `--overlap <percent>`
 :   Define lower boundary for overlap when frequency hopping (otherwise meaningless).
+
+`-O <file>`,  `--output <file>`
+:   The output file. If this option is not given, the output is written to stdout.
 
 `-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
