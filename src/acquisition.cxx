@@ -360,7 +360,8 @@ void Acquisition::print_summary() const {
 void Acquisition::write_data() const {
 
   std::ofstream binfile;
-  float pwrdb = 0.0;
+  double pwrdb = 0.0;
+  float fpwrdb = 0.0;
   double freq = 0.0;
 
   if(!params.matrixMode) {
@@ -397,11 +398,12 @@ void Acquisition::write_data() const {
                      - (params.baseline ? aux.baseline_values[i] : 0);
     }
     if( params.matrixMode ) {
-      // we WERE writing a double, so 8 bytes, removed the sizeof()
-      // we are NOW writing a float, so 4 bytes
+      // we are accumulating a double, so 8 bytes, removed the sizeof()
+      // we are writing a float, so 4 bytes
       // binary file size for 15 mins with N=100 now 43.4 MB instead of 86.8 MB )
-      binfile.write( (char*)&pwrdb, 4 );
-      if(metaRows==0) {
+      fpwrdb=pwrdb;
+      binfile.write( (char*)&fpwrdb, 4 );
+      if(metaRows==1) {
           metaCols = metaCols + 1;
       }
     }
@@ -418,7 +420,7 @@ void Acquisition::write_data() const {
 
   if( params.matrixMode ) {
     binfile.close();
-    if( freq >= params.finalfreq ) {
+    if( tuned_freq >= params.finalfreq ) {
       metaRows = metaRows + 1;
     }
   }
@@ -434,12 +436,6 @@ void Acquisition::write_data() const {
 std::string Acquisition::currentDateTime() {
   time_t now = std::time(0);
   char buf[80];
-  if( params.matrixMode ) {
-    std::strftime(buf, sizeof(buf), "%y%m%d%H%M%S", std::gmtime(&now));
-  }
-  else
-  {
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
-  }
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d %X UTC", std::gmtime(&now));
   return buf;
 }

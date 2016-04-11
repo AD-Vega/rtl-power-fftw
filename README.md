@@ -7,7 +7,7 @@ It is inspired by the program `rtl_power` in `librtlsdr`.  However, the
 said program has several deficiencies that limit its usage in
 demanding environments, such as radio astronomy. An inspection of
 `rtl_power` in hope of modifying it and obtaining better performance
-resulted in the conclusion that it would be an unfeasible task. 
+resulted in the conclusion that it would be an unfeasible task.
 Measurements of FFT performance showed that the leading library
 in the field of FFT - `fftw` - makes mincemeat of the routine used in
 `rtl_power`, even on simple processors such as raspberryPi. Therefore,
@@ -20,13 +20,13 @@ rtlsdr devices were set out:
 	to optimize observation time (continuous sampling)
   - it should be friendly to use and adhere to the UNIX philosophy of
 	only doing one thing, but doing it well
-  - the output of the program should be easy to further use with the 
+  - the output of the program should be easy to further use with the
 	standard tools (like `gnuplot`).
-  
-The desire to have simple code to handle option parsing lead to the 
-choice of TCLAP and therefore C++. This further meant that to implement 
-things in a neat way, C++11 functionality snuck into the program and 
-therefore a modern, C++11 enabled compiler is needed to 
+
+The desire to have simple code to handle option parsing lead to the
+choice of TCLAP and therefore C++. This further meant that to implement
+things in a neat way, C++11 functionality snuck into the program and
+therefore a modern, C++11 enabled compiler is needed to
 compile `rtl_power_fftw`.
 
 ## Prerequisites
@@ -34,8 +34,7 @@ compile `rtl_power_fftw`.
 In order to prepare your environment to build from the sources you have to first install a couple of development libraries.
 This step is needed only the first time.
 
-sudo apt-get install libfftw3-dev  
-sudo apt-get install libtclap-dev  
+sudo apt-get install libfftw3-dev libtclap-dev  
 
 ## Installation
 

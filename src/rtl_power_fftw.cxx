@@ -37,7 +37,7 @@
 #include <time.h>
 
 std::ofstream binfile, metafile;
-int metaRows = 0;
+int metaRows = 1;
 int metaCols = 0;
 float avgScanDur = 0.0;
 float sumScanDur = 0.0;
@@ -180,7 +180,6 @@ int main(int argc, char **argv)
         // here we manage session duration in seconds:
         if (time(NULL) >= exit_time) {
     			do_exit = true;
-          //metaRows = metaRows - 1; // let's fix the row count since we increment after lastfreq bin output
           std::cerr << "Session duration elapsed." << std::endl;
           // Mark the end of a measurement set with an additional empty line
           // (one was already output as a terminator for the last data set).
@@ -208,6 +207,7 @@ int main(int argc, char **argv)
     if(params.matrixMode) {
       metafile.open(params.meta_file, std::ios::out | std::ios::trunc );
       metafile << metaCols << " # frequency bins (columns)" << std::endl;
+      metaRows = metaRows - 1; // let's fix the rows count since we start from 1
       metafile << metaRows << " # scans (rows)" << std::endl;
       metafile << startFreq << " # startFreq (Hz)" << std::endl;
       metafile << endFreq << " # endFreq (Hz)" << std::endl;
