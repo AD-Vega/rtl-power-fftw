@@ -24,6 +24,7 @@
 
 #include <iostream>
 #include <list>
+#include <math.h>
 #include <string>
 #include <tclap/CmdLine.h>
 #include <thread>
