@@ -359,7 +359,7 @@ void Acquisition::markResultsReady() {
   pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
   // Normalize the data and subtract baseline.
-  for (size_t i = 0; i < params.N; i++) {
+  for (ssize_t i = 0; i < params.N; i++) {
     pwr[i] = (pwr[i] / repeatsProcessed / params.N / actual_samplerate)
              - (params.baseline ? aux.baseline_values[i] : 0);
   }
