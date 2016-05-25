@@ -65,7 +65,6 @@ std::vector<T> read_inputfile(std::istream* stream) {
 
 AuxData::AuxData(const Params& params) {
   std::istream* stream;
-  std::ifstream fs;
   // Window function and baseline correction
   // If both are read from stdin, we read it all in one go,
   // and see if the total number of values adds up to what we need.
@@ -104,12 +103,13 @@ AuxData::AuxData(const Params& params) {
   // just enough data points.
   else {
     if (params.window) {
+      std::ifstream fs;
       if (params.window_file == "-") {
         Diagnostics() << "Reading window function from stdin.\n";
         stream = &std::cin;
       }
       else {
-        Diagnostics() << "Reading window function from file " << params.baseline_file << "\n";
+        Diagnostics() << "Reading window function from file " << params.window_file << "\n";
         fs.open(params.window_file);
         if (!fs.good()) {
           throw RPFexception(
@@ -131,6 +131,7 @@ AuxData::AuxData(const Params& params) {
       }
     }
     if (params.baseline) {
+     std::ifstream fs;
       if (params.baseline_file == "-") {
         Diagnostics() << "Reading baseline from stdin.\n";
         stream = &std::cin;
