@@ -159,6 +159,13 @@ AuxData::AuxData(const Params& params) {
       }
     }
   }
+  // If baseline data is present, we have to convert it from dB to linear
+  // values.
+  if (params.baseline)
+  {
+    for (auto& value : baseline_values)
+      value = pow(10, 0.1 * value);
+  }
 }
 
 Plan::Plan(Params& params_, int actual_samplerate_) :
@@ -358,10 +365,11 @@ void Acquisition::markResultsReady() {
   // Finalize the result: interpolate the central point to cancel DC bias.
   pwr[params.N/2] = (pwr[params.N/2 - 1] + pwr[params.N/2+1]) / 2;
 
-  // Normalize the data and subtract baseline.
+  // Normalize the data and do baseline correction.
   for (ssize_t i = 0; i < params.N; i++) {
-    pwr[i] = (pwr[i] / repeatsProcessed / params.N / actual_samplerate)
-             - (params.baseline ? aux.baseline_values[i] : 0);
+    pwr[i] = (pwr[i] / repeatsProcessed / params.N / actual_samplerate);
+    if (params.baseline)
+      pwr[i] /= aux.baseline_values[i];
   }
 
   // Announce that the data is ready.
