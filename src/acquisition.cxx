@@ -253,7 +253,7 @@ void Acquisition::run() {
   data.acquisition_finished = false;
   data.repeats_done = 0;
 
-  std::thread t(&Datastore::fftThread, std::ref(data));
+  std::thread t(&Datastore::fftThread, &data);
 
   // Record the start-of-acquisition timestamp.
   startAcqTimestamp = currentDateTime();
