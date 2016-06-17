@@ -22,6 +22,8 @@
 
 #include <string>
 
+const auto rtl_power_fftw_version = "2.0-beta1";
+
 const int base_buf = 16384;
 const int default_buf_multiplier = 100;
 

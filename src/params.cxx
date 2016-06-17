@@ -104,7 +104,7 @@ void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
 
 Params::Params(int argc, char** argv) {
   try {
-    TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', "1.0-beta1");
+    TCLAP::CmdLine cmd("Obtain power spectrum from RTL device using FFTW library.", ' ', rtl_power_fftw_version);
     TCLAP::ValueArg<int> arg_buffers("","buffers","Number of read buffers (don't touch unless running out of memory).",false,buffers,"buffers");
     cmd.add( arg_buffers );
     TCLAP::ValueArg<std::string> arg_window("w","window","Use window function, from file or stdin.",false,"","file|-");
