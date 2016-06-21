@@ -92,15 +92,27 @@ double parse_time(std::string s) {
 }
 
 template <typename T>
-void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
+void ensure_nonnegative_arg(std::list<TCLAP::ValueArg<T>*> list) {
   for (auto arg : list) {
-    if (arg->isSet() && arg->getValue() <= 0) {
+    if (arg->isSet() && arg->getValue() < 0) {
       throw RPFexception(
         "Argument to '"  + arg->getName() + "' must be >= 0.",
         ReturnValue::InvalidArgument);
     }
   }
 }
+
+template <typename T>
+void ensure_positive_arg(std::list<TCLAP::ValueArg<T>*> list) {
+  for (auto arg : list) {
+    if (arg->isSet() && arg->getValue() <= 0) {
+      throw RPFexception(
+        "Argument to '"  + arg->getName() + "' must be > 0.",
+        ReturnValue::InvalidArgument);
+    }
+  }
+}
+
 
 Params::Params(int argc, char** argv) {
   try {
@@ -149,7 +161,8 @@ Params::Params(int argc, char** argv) {
     cmd.parse(argc, argv);
 
     // Ain't this C++11 f**** magic? Watch this:
-    ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_index, &arg_buffers, &arg_bufferlen, &arg_threads});
+    ensure_nonnegative_arg<int>({&arg_index});
+    ensure_positive_arg<int>({&arg_bins, &arg_rate, &arg_buffers, &arg_bufferlen, &arg_threads});
     ensure_positive_arg<int64_t>({&arg_repeats});
 
     // Verbosity depends on the number of times the --quiet switch was given.
