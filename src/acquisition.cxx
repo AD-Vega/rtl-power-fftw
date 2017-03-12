@@ -194,7 +194,7 @@ Plan::Plan(Params& params_, int actual_samplerate_) :
     double min_overhang = actual_samplerate*params.min_overlap/100;
     int hops = ceil((double(params.stopfreq - params.startfreq) - min_overhang) / (double(actual_samplerate) - min_overhang));
     if (hops > 1) {
-      int overhang = (hops*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
+      int overhang = (int64_t(hops)*actual_samplerate - (params.stopfreq - params.startfreq)) / (hops - 1);
       freqs_to_tune.push_back(params.startfreq + actual_samplerate/2.0);
       //Mmmm, thirsty? waah-waaah...
       for (int hop = 1; hop < hops; hop++) {
