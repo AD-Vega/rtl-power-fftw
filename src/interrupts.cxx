@@ -31,11 +31,15 @@ void CtrlC_handler(int signal) {
 }
 
 void set_CtrlC_handler(bool install) {
+#ifdef _WIN32
+  signal(SIGINT, CtrlC_handler);
+#else
   struct sigaction action;
   action.sa_handler = (install ? &CtrlC_handler : SIG_DFL);
   sigemptyset(&action.sa_mask);
   action.sa_flags = 0;
   sigaction(SIGINT, &action, nullptr);
+#endif
 }
 
 bool checkInterrupt(InterruptState checkLevel) {
