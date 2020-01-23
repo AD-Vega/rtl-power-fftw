@@ -29,8 +29,18 @@ Datastore::Datastore(const Params& params_, std::vector<float>& window_values_) 
 
   inbuf = (complex*)fftwf_alloc_complex(params.N);
   outbuf = (complex*)fftwf_alloc_complex(params.N);
+
+  if (params.wisdom_file != "") 
+  {
+    fftwf_import_wisdom_from_filename(params.wisdom_file.c_str()); 
+  }
+
   plan = fftwf_plan_dft_1d(params.N, (fftwf_complex*)inbuf, (fftwf_complex*)outbuf,
                           FFTW_FORWARD, FFTW_MEASURE);
+  if (params.wisdom_file != "") 
+  {
+    fftwf_export_wisdom_to_filename(params.wisdom_file.c_str()); 
+  }
 }
 
 Datastore::~Datastore() {
