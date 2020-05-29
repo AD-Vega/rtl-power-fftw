@@ -213,7 +213,7 @@ Acquisition::Acquisition(const Params& params_,
                          Rtlsdr& rtldev_,
                          Datastore& data_,
                          int actual_samplerate_,
-                         int freq_) :
+                         int64_t freq_) :
   params(params_), aux(aux_), rtldev(rtldev_), data(data_),
   actual_samplerate(actual_samplerate_), freq(freq_)
 { }
