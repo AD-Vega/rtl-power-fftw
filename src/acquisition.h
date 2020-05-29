@@ -50,7 +50,7 @@ public:
   void print() const;
 
   // List of frequencies to tune to.
-  std::list<int> freqs_to_tune;
+  std::list<int64_t> freqs_to_tune;
   // A cached value of the true sample rate.
   int actual_samplerate;
 
@@ -65,15 +65,15 @@ protected:
 // receiver, so TuneError must not be treated as a definite failure.
 class TuneError : public std::exception {
 public:
-  TuneError(int freq_) : freq(freq_) {}
+  TuneError(int64_t freq_) : freq(freq_) {}
   const char* what() const noexcept {
     return "Could not tune to the given frequency.";
   }
   // The frequency that the receiver was unable to tune to.
-  int frequency() { return freq; }
+  int64_t frequency() { return freq; }
 
 protected:
-  int freq;
+  int64_t freq;
 };
 
 
@@ -85,7 +85,7 @@ public:
               Rtlsdr& rtldev,
               Datastore& data,
               int actual_samplerate,
-              int freq);
+              int64_t freq);
 
   // Run the data acquisition.
   void run();
@@ -109,9 +109,9 @@ protected:
   // A cached version of the actual sample rate.
   int actual_samplerate;
   // The frequency to tune to in this acquisition.
-  int freq;
+  int64_t freq;
   // The actual frequency returned by the device.
-  int tuned_freq;
+  int64_t tuned_freq;
   // Timestamp for the start of the acquisition.
   std::string startAcqTimestamp;
   // Timestamp for the end of the acquisition.
