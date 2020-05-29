@@ -30,7 +30,7 @@
 #include <thread>
 
 
-int parse_frequency(std::string s) {
+int64_t parse_frequency(std::string s) {
   std::istringstream ss(s);
   double f;
   std::string multiplier;
@@ -43,7 +43,7 @@ int parse_frequency(std::string s) {
     f *= 1e9;
   else if (multiplier != "")
     return -1;
-  return (int)f;
+  return (int64_t)f;
 }
 
 double parse_time(std::string s) {

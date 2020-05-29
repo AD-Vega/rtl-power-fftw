@@ -232,7 +232,7 @@ Acquisition::Acquisition(const Params& params_,
                          Rtlsdr& rtldev_,
                          Dispatcher& dispatcher_,
                          int actual_samplerate_,
-                         int freq_) :
+                         int64_t freq_) :
   pwr(params_.N), actual_samplerate(actual_samplerate_), params(params_),
   aux(aux_), rtldev(rtldev_), dispatcher(dispatcher_), freq(freq_),
   queue_histogram(params.buffers+1, 0)

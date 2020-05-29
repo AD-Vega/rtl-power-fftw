@@ -54,7 +54,7 @@ public:
   void print() const;
 
   // List of frequencies to tune to.
-  std::list<int> freqs_to_tune;
+  std::list<int64_t> freqs_to_tune;
   // A cached value of the true sample rate.
   int actual_samplerate;
 
@@ -69,15 +69,15 @@ protected:
 // receiver, so TuneError must not be treated as a definite failure.
 class TuneError : public std::exception {
 public:
-  TuneError(int freq_) : freq(freq_) {}
+  TuneError(int64_t freq_) : freq(freq_) {}
   const char* what() const noexcept {
     return "Could not tune to the given frequency.";
   }
   // The frequency that the receiver was unable to tune to.
-  int frequency() { return freq; }
+  int64_t frequency() { return freq; }
 
 protected:
-  int freq;
+  int64_t freq;
 };
 
 
@@ -91,7 +91,7 @@ public:
               Rtlsdr& rtldev,
               Dispatcher& dispatcher,
               int actual_samplerate,
-              int freq);
+              int64_t freq);
 
   // Run the data acquisition.
   void run();
@@ -108,7 +108,7 @@ public:
   // A cached version of the actual sample rate.
   int actual_samplerate;
   // The actual frequency returned by the device.
-  int tuned_freq;
+  int64_t tuned_freq;
   // Timestamp for the start of the acquisition.
   Timestamp startAcqTimestamp;
   // Timestamp for the end of the acquisition.
@@ -137,7 +137,7 @@ protected:
   // A reference to the dispatcher (for submitting the acquired data).
   Dispatcher& dispatcher;
   // The frequency to tune to in this acquisition.
-  int freq;
+  int64_t freq;
   // Queue histogram: each time an unoccupied buffer is requested from the
   // dispatcher, the queue length is recorded and the corresponding bin in this
   // histogram is increased by one. This serves as an indication of the buffer
