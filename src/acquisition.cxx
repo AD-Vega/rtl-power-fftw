@@ -257,7 +257,7 @@ void Acquisition::run() {
       if (tuned_freq != 0)
         success = true;
     }
-    catch (RPFexception) {}
+    catch (const RPFexception&) {}
   }
 
   // Check if the frequency was actually successfully set.
