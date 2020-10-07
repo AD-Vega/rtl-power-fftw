@@ -140,6 +140,9 @@ Params::Params(int argc, char** argv) {
     TCLAP::ValueArg<std::string> arg_baseline("B","baseline","Subtract baseline, read baseline data from file or stdin.",false,"","file|-");
     cmd.add( arg_baseline );
 
+    TCLAP::ValueArg<std::string> arg_wisdom("W","wisdom","Specify a wisdom file for fftw.",false,"","file");
+    cmd.add( arg_wisdom );
+ 
     cmd.parse(argc, argv);
 
     // Ain't this C++11 f**** magic? Watch this:
@@ -162,6 +165,7 @@ Params::Params(int argc, char** argv) {
     talkless = arg_quiet.getValue();
     strict_time = arg_strict_time.getValue();
     min_overlap = arg_min_overlap.getValue();
+    wisdom_file = arg_wisdom.getValue(); 
     //clipped_output_isSet = arg_clipped.getValue();
 
     // Due to USB specifics, buffer length for reading rtl_sdr device
