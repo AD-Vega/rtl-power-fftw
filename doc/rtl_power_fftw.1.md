@@ -56,14 +56,14 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-o <percent>`,  `--overlap <percent>`
 :   Define lower boundary for overlap when frequency hopping (otherwise meaningless).
 
+`-P`,  `--powerbiast`
+:   Switch the bias-T ON/OFF
+
 `-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
 `-q`,  `--quiet`
 :   Limit verbosity. Allows the various printouts to happen only the first time and not on every scan.
-
-`-P`,  `--powerbiast`
-:   Switch the bias-T ON/OFF
 
 `-r <Hz>`,  `--rate <Hz>`
 :   Sample rate of the receiver in Hz.
