@@ -56,6 +56,9 @@ The program can be stopped gracefully by sending the SIGINT signal to it (pressi
 `-o <percent>`,  `--overlap <percent>`
 :   Define lower boundary for overlap when frequency hopping (otherwise meaningless).
 
+`-P`,  `--powerbiast`
+:   Switch the bias-T ON/OFF
+
 `-p <ppm>`,  `--ppm <ppm>`
 :   Correct for the oscillator error of RTL-SDR device. The correction should be given in ppm.
 
