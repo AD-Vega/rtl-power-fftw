@@ -57,6 +57,7 @@ public:
   double session_duration = 0;
   bool session_duration_isSet = false;
   bool linear = false;
+  bool biast = false;
   bool talkless = false;  // default: verbose
   bool matrixMode = false;  // default: original rtl-power-fftw output format
   int finalfreq = 0;

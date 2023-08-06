@@ -80,7 +80,16 @@ int main(int argc, char **argv)
     std::cerr << "Selected nearest available gain: " << gain
               << " (" << 0.1*gain << " dB)" << std::endl;
     rtldev.set_gain(gain);
-
+    
+    //Switch ON the bias-T if requested
+    if (params.biast) {
+      rtldev.set_biast(1);
+      std::cerr << "Bias-T is switched ON" << std::endl;
+    }
+    else {
+      rtldev.set_biast(0);
+      std::cerr << "Bias-T is switched OFF" << std::endl;
+    }
     // Temporarily set the frequency to params.cfreq, just so that the device does not
     // complain upon setting the sample rate. If this fails, it's not a big deal:
     // the sample rate will be read out just fine, but librtlsdr _might_ print an

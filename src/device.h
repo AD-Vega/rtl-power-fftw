@@ -44,10 +44,12 @@ public:
   void set_frequency(uint32_t frequency);
   void set_freq_correction(int ppm_error);
   void set_sample_rate(uint32_t sample_rate);
+  void set_biast(int biasval);
 
   // Convenience functions.
   int nearest_gain(int gain) const;
   void print_gains() const;
+
 
 private:
   rtlsdr_dev_t *dev;

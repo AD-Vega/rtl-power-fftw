@@ -108,6 +108,17 @@ void Rtlsdr::set_gain(int gain) {
   }
 }
 
+void Rtlsdr::set_biast(int biasval) {
+  int status = 0;
+  status = rtlsdr_set_bias_tee(dev, biasval);
+  if (status != 0) {
+    throw RPFexception(
+      "RTL device: could not switch ON/OFF the bias-T.",
+      ReturnValue::HardwareError);
+  }
+}
+
+
 void Rtlsdr::set_frequency(uint32_t frequency) {
   if (rtlsdr_set_center_freq(dev, frequency) < 0) {
     throw RPFexception(

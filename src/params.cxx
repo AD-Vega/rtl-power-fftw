@@ -125,6 +125,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_repeats );
     TCLAP::SwitchArg arg_linear("l","linear","Calculate linear power values instead of logarithmic.", linear);
     cmd.add( arg_linear );
+    TCLAP::SwitchArg arg_biast("P","powerbiast","Switch the bias-T on/off", biast); //note to self - Added by VK6JN
+    cmd.add( arg_biast );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
@@ -154,6 +156,7 @@ Params::Params(int argc, char** argv) {
       std::cerr << "Number of bins should be even, changing to " << N << "." << std::endl;
     }
     linear = arg_linear.getValue();
+    biast = arg_biast.getValue();
     gain = arg_gain.getValue();
     sample_rate = arg_rate.getValue();
     buffers = arg_buffers.getValue();
