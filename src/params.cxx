@@ -117,7 +117,7 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_quiet );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
-    TCLAP::SwitchArg arg_biast("P","powerbiast","Switch the bias-T ON/OFF", biast); //note to self - Added by VK6JN
+    TCLAP::SwitchArg arg_biast("P","powerbiast","Switch the bias-T ON/OFF", biast); 
     cmd.add( arg_biast );
     TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
     cmd.add( arg_min_overlap );
