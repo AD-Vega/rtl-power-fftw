@@ -117,6 +117,8 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_quiet );
     TCLAP::ValueArg<int> arg_ppm("p","ppm","Set custom ppm error in RTL-SDR device.", false, ppm_error, "ppm");
     cmd.add( arg_ppm );
+    TCLAP::SwitchArg arg_biast("P","powerbiast","Switch the bias-T ON/OFF", biast); //note to self - Added by VK6JN
+    cmd.add( arg_biast );
     TCLAP::ValueArg<double> arg_min_overlap("o","overlap","Define lower boundary for overlap when frequency hopping (otherwise meaningless).",false, min_overlap, "percent");
     cmd.add( arg_min_overlap );
     TCLAP::ValueArg<std::string> arg_matrixMode("m","matrix","Will output data in binary matrix format plus separate metadata text file",false,"","filename (without extension)");
@@ -125,8 +127,6 @@ Params::Params(int argc, char** argv) {
     cmd.add( arg_repeats );
     TCLAP::SwitchArg arg_linear("l","linear","Calculate linear power values instead of logarithmic.", linear);
     cmd.add( arg_linear );
-    TCLAP::SwitchArg arg_biast("P","powerbiast","Switch the bias-T on/off", biast); //note to self - Added by VK6JN
-    cmd.add( arg_biast );
     TCLAP::ValueArg<int> arg_gain("g","gain","Receiver gain.",false, gain, "1/10th of dB");
     cmd.add( arg_gain );
     TCLAP::ValueArg<std::string> arg_freq("f","freq","Center frequency of the receiver or frequency range to scan.",false,"","Hz | Hz:Hz");
